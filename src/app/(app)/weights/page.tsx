@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { getWeights, createWeight, updateWeight, deleteWeight, getSections } from '@/lib/store'
-import { fmtDate, cpStatus } from '@/lib/utils'
+import { fmtDate, cpStatus, wtStatus } from '@/lib/utils'
 import type { Weight } from '@/lib/mockData'
 
 const PAGE = 15
@@ -15,12 +15,12 @@ export default function WeightsPage() {
 
   useEffect(() => { setWeights([...getWeights()]) }, [])
   const sections = getSections()
-  const [q, setQ]             = useState('')
+  const [q, setQ] = useState('')
   const [fStatus, setFStatus] = useState('')
-  const [page, setPage]       = useState(1)
-  const [modal, setModal]     = useState<'add' | 'edit' | null>(null)
-  const [editSn, setEditSn]   = useState('')
-  const [form, setForm]       = useState(empty())
+  const [page, setPage] = useState(1)
+  const [modal, setModal] = useState<'add' | 'edit' | null>(null)
+  const [editSn, setEditSn] = useState('')
+  const [form, setForm] = useState(empty())
 
   const filtered = useMemo(() => weights.filter(w => {
     const mq = !q || [w.sn, w.supplier, w.certNo].some(v => v.toLowerCase().includes(q.toLowerCase()))
@@ -29,19 +29,20 @@ export default function WeightsPage() {
   }), [weights, q, fStatus])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE))
-  const pageData   = filtered.slice((page - 1) * PAGE, page * PAGE)
+  const pageData = filtered.slice((page - 1) * PAGE, page * PAGE)
 
-  function openAdd()  { setForm(empty()); setEditSn(''); setModal('add') }
+  function openAdd() { setForm(empty()); setEditSn(''); setModal('add') }
   function openEdit(w: Weight) { setForm({ ...w }); setEditSn(w.sn); setModal('edit') }
 
   function save() {
     const sn = form.sn.trim()
     if (!sn) { alert('กรุณากรอกหมายเลข S/N'); return }
+    const status = wtStatus(form.uncertainty, form.mpe)
     if (modal === 'add') {
-      const res = createWeight({ ...form, sn })
+      const res = createWeight({ ...form, sn, status })
       if (!res) { alert('S/N นี้มีอยู่แล้ว'); return }
     } else {
-      updateWeight(editSn, { ...form })
+      updateWeight(editSn, { ...form, status })
     }
     setWeights([...getWeights()])
     setModal(null)
@@ -81,36 +82,45 @@ export default function WeightsPage() {
 
       <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-[12px]" style={{ tableLayout: 'fixed' }}>
+          <table className="w-full text-[12px]" style={{ tableLayout: 'auto', minWidth: 1400 }}>
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase w-28">S/N</th>
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase w-24">แผนก</th>
-                <th className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase w-20">น้ำหนัก (g)</th>
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase w-16">Class</th>
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase w-28">ผู้จำหน่าย</th>
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase w-24">วันที่สอบเทียบ</th>
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase w-28">เลขที่เซอร์</th>
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase w-20">สถานะ</th>
-                <th className="px-3 py-3 text-center text-[10px] font-medium text-gray-400 uppercase w-16">จัดการ</th>
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Section</th>
+                <th className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Weight (g)</th>
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Weight S/N</th>
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Class</th>
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Supplier</th>
+                <th className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">MPE (mg.)</th>
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Calibrate Date</th>
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Calibrate By</th>
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Certificate Report No.</th>
+                <th className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Conventional Mass (mg.)</th>
+                <th className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Uncertainty (mg.)</th>
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Status</th>
+                <th className="px-3 py-3 text-center text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">จัดการ</th>
               </tr>
             </thead>
             <tbody>
               {pageData.length === 0 ? (
-                <tr><td colSpan={9} className="py-14 text-center text-gray-400 text-[12px]">ยังไม่มีข้อมูลลูกตุ้ม — กด &quot;+ เพิ่มลูกตุ้ม&quot; เพื่อเริ่มต้น</td></tr>
+                <tr><td colSpan={13} className="py-14 text-center text-gray-400 text-[12px]">ยังไม่มีข้อมูลลูกตุ้ม — กด &quot;+ เพิ่มลูกตุ้ม&quot; เพื่อเริ่มต้น</td></tr>
               ) : pageData.map(w => {
                 const sec = sections.find(s => s.code === w.sectionCode)
+                const st = wtStatus(w.uncertainty, w.mpe)
                 return (
                   <tr key={w.sn} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-3 py-3 font-mono text-blue-600 font-semibold">{w.sn}</td>
-                    <td className="px-3 py-3 text-gray-600">{sec?.name ?? w.sectionCode ?? '—'}</td>
-                    <td className="px-3 py-3 text-right tabular-nums">{w.weightG}</td>
-                    <td className="px-3 py-3"><span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px]">{w.class_}</span></td>
+                    <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{sec?.name ?? w.sectionCode ?? '—'}</td>
+                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{w.weightG}</td>
+                    <td className="px-3 py-3 font-mono text-blue-600 font-semibold whitespace-nowrap">{w.sn}</td>
+                    <td className="px-3 py-3 whitespace-nowrap"><span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px]">{w.class_}</span></td>
                     <td className="px-3 py-3 text-gray-600 truncate">{w.supplier || '—'}</td>
-                    <td className="px-3 py-3 text-gray-500">{fmtDate(w.calDate)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{w.mpe}</td>
+                    <td className="px-3 py-3 text-gray-500 whitespace-nowrap">{fmtDate(w.calDate)}</td>
+                    <td className="px-3 py-3 text-gray-600 truncate">{w.calBy || '—'}</td>
                     <td className="px-3 py-3 text-gray-500 truncate">{w.certNo || '—'}</td>
-                    <td className="px-3 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${w.status === 'Pass' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{w.status}</span>
+                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{w.convMass}</td>
+                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{w.uncertainty}</td>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${st === 'Pass' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{st}</span>
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex justify-center gap-1.5">
@@ -146,29 +156,31 @@ export default function WeightsPage() {
             </div>
             <div className="p-5 space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div><label className={lbl}>S/N *</label><input className={inp} value={form.sn} onChange={e => setForm(f => ({ ...f, sn: e.target.value }))} disabled={modal === 'edit'} /></div>
-                <div><label className={lbl}>แผนก</label>
+                <div><label className={lbl}>Section</label>
                   <select className={inp} value={form.sectionCode} onChange={e => setForm(f => ({ ...f, sectionCode: e.target.value }))}>
-                    <option value="">— เลือกแผนก —</option>
+                    <option value="">— เลือกจากทะเบียน —</option>
                     {sections.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
                   </select></div>
-                <div><label className={lbl}>น้ำหนัก (g)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.weightG || ''} onChange={e => setForm(f => ({ ...f, weightG: Number(e.target.value) }))} /></div>
+                <div><label className={lbl}>Weight (g)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.weightG || ''} onChange={e => setForm(f => ({ ...f, weightG: Number(e.target.value) }))} /></div>
+                <div><label className={lbl}>Weight S/N *</label><input className={inp} value={form.sn} onChange={e => setForm(f => ({ ...f, sn: e.target.value }))} disabled={modal === 'edit'} /></div>
                 <div><label className={lbl}>Class</label>
                   <select className={inp} value={form.class_} onChange={e => setForm(f => ({ ...f, class_: e.target.value }))}>
-                    {['E1','E2','F1','F2','M1','M2','M3'].map(c => <option key={c} value={c}>{c}</option>)}
+                    {['E1', 'E2', 'F1', 'F2', 'M1', 'M2', 'M3'].map(c => <option key={c} value={c}>{c}</option>)}
                   </select></div>
-                <div><label className={lbl}>MPE (mg)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.mpe || ''} onChange={e => setForm(f => ({ ...f, mpe: Number(e.target.value) }))} /></div>
-                <div><label className={lbl}>Conventional Mass (g)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.convMass || ''} onChange={e => setForm(f => ({ ...f, convMass: Number(e.target.value) }))} /></div>
-                <div><label className={lbl}>Uncertainty (mg)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.uncertainty || ''} onChange={e => setForm(f => ({ ...f, uncertainty: Number(e.target.value) }))} /></div>
-                <div><label className={lbl}>ผู้จำหน่าย</label><input className={inp} value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} /></div>
-                <div><label className={lbl}>วันที่สอบเทียบ</label><input type="date" className={inp} value={form.calDate} onChange={e => setForm(f => ({ ...f, calDate: e.target.value }))} /></div>
-                <div><label className={lbl}>สอบเทียบโดย</label><input className={inp} value={form.calBy} onChange={e => setForm(f => ({ ...f, calBy: e.target.value }))} /></div>
-                <div><label className={lbl}>เลขที่เซอร์ติฟิเคต</label><input className={inp} value={form.certNo} onChange={e => setForm(f => ({ ...f, certNo: e.target.value }))} /></div>
-                <div><label className={lbl}>สถานะ</label>
-                  <select className={inp} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as 'Pass'|'Not pass' }))}>
-                    <option value="Pass">Pass</option>
-                    <option value="Not pass">Not pass</option>
-                  </select></div>
+                <div><label className={lbl}>Supplier</label><input className={inp} value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} /></div>
+                <div><label className={lbl}>MPE (mg.)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.mpe || ''} onChange={e => setForm(f => ({ ...f, mpe: Number(e.target.value) }))} /></div>
+                <div><label className={lbl}>Calibrate Date</label><input type="date" className={inp} value={form.calDate} onChange={e => setForm(f => ({ ...f, calDate: e.target.value }))} /></div>
+                <div><label className={lbl}>Calibrate By</label><input className={inp} value={form.calBy} onChange={e => setForm(f => ({ ...f, calBy: e.target.value }))} /></div>
+                <div><label className={lbl}>Certificate Report No.</label><input className={inp} value={form.certNo} onChange={e => setForm(f => ({ ...f, certNo: e.target.value }))} /></div>
+                <div><label className={lbl}>Conventional Mass (mg.)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.convMass || ''} onChange={e => setForm(f => ({ ...f, convMass: Number(e.target.value) }))} /></div>
+                <div><label className={lbl}>Uncertainty (mg.)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.uncertainty || ''} onChange={e => setForm(f => ({ ...f, uncertainty: Number(e.target.value) }))} /></div>
+                <div><label className={lbl}>Status (คำนวณอัตโนมัติ)</label>
+                  <div className={`${inp} flex items-center bg-gray-100`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${wtStatus(form.uncertainty, form.mpe) === 'Pass' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                      {wtStatus(form.uncertainty, form.mpe)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50">

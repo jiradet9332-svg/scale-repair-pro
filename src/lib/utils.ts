@@ -21,26 +21,26 @@ export function fmtDateTime(d: string | Date | null | undefined): string {
 
 export const repairTypeLabel: Record<RepairType, string> = {
   self: 'ซ่อม / เปลี่ยนอะไหล่',
-  ext:  'ส่งซ่อมภายนอก',
+  ext: 'ส่งซ่อมภายนอก',
   both: 'ซ่อมเอง + ส่งนอก',
 }
 
 // ป้ายแบบย่อ ใช้ในตารางประวัติการซ่อม
 export const repairTypeShortLabel: Record<RepairType, string> = {
   self: 'ซ่อม',
-  ext:  'ส่งซ่อมนอก',
+  ext: 'ส่งซ่อมนอก',
   both: 'ทั้งสองแบบ',
 }
 
 export const repairTypeIcon: Record<RepairType, string> = {
   self: 'ti-tool',
-  ext:  'ti-truck',
+  ext: 'ti-truck',
   both: 'ti-stack-2',
 }
 
 export const repairTypeColor: Record<RepairType, string> = {
   self: 'bg-blue-50 text-blue-700 border-blue-200',
-  ext:  'bg-amber-50 text-amber-700 border-amber-200',
+  ext: 'bg-amber-50 text-amber-700 border-amber-200',
   both: 'bg-purple-50 text-purple-700 border-purple-200',
 }
 
@@ -55,10 +55,16 @@ export function cpDaysUntil(dateStr: string): number {
   return Math.round((new Date(dateStr).getTime() - Date.now()) / 86400000)
 }
 
+// ลูกตุ้มน้ำหนักมาตรฐาน — คำนวณสถานะอัตโนมัติ
+// เกณฑ์: Pass ถ้า Uncertainty(mg.) <= MPE(mg.) / 3, นอกนั้น Not pass
+export function wtStatus(uncertainty: number, mpe: number): 'Pass' | 'Not pass' {
+  return Number(uncertainty || 0) <= Number(mpe || 0) / 3 ? 'Pass' : 'Not pass'
+}
+
 export function cpStatus(lastCal: string, intervalMonths: number) {
-  const due  = cpAddMonths(lastCal, intervalMonths)
+  const due = cpAddMonths(lastCal, intervalMonths)
   const days = cpDaysUntil(due)
-  if (days < 0)    return { label: 'เกินกำหนด',       cls: 'bg-red-50 text-red-700 border-red-200',     days, due }
-  if (days <= 30)  return { label: 'ใกล้ครบกำหนด',    cls: 'bg-amber-50 text-amber-700 border-amber-200', days, due }
-  return               { label: 'ปกติ',              cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', days, due }
+  if (days < 0) return { label: 'เกินกำหนด', cls: 'bg-red-50 text-red-700 border-red-200', days, due }
+  if (days <= 30) return { label: 'ใกล้ครบกำหนด', cls: 'bg-amber-50 text-amber-700 border-amber-200', days, due }
+  return { label: 'ปกติ', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', days, due }
 }
