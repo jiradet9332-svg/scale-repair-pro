@@ -5,8 +5,6 @@ import { fmtDate, cpStatus, wtStatus } from '@/lib/utils'
 import type { Weight } from '@/lib/mockData'
 
 const PAGE = 15
-const CLASS_SUGGESTIONS = ['E1', 'E2', 'F1', 'F2', 'M1', 'M2', 'M3']
-
 // ฟอร์มเก็บช่องตัวเลขเป็น string ระหว่างพิมพ์ (กันปัญหาเลข 0 นำหน้าหาย เช่น 0.3 กลายเป็น .3)
 type WeightFormState = Omit<Weight, 'weightG' | 'mpe' | 'convMass' | 'uncertainty'> & {
   weightG: string
@@ -99,22 +97,22 @@ export default function WeightsPage() {
 
       <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-[12px]" style={{ tableLayout: 'auto', minWidth: 1400 }}>
+          <table className="w-full text-[12px]" style={{ tableLayout: 'fixed', minWidth: 1400 }}>
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Section</th>
-                <th className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Weight (g)</th>
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Weight S/N</th>
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Class</th>
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Supplier</th>
-                <th className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">MPE (mg.)</th>
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Calibrate Date</th>
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Calibrate By</th>
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Certificate Report No.</th>
-                <th className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Conventional Mass (mg.)</th>
-                <th className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Uncertainty (mg.)</th>
-                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">Status</th>
-                <th className="px-3 py-3 text-center text-[10px] font-medium text-gray-400 uppercase whitespace-nowrap">จัดการ</th>
+                <th style={{ width: 110 }} className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase truncate">Section</th>
+                <th style={{ width: 90 }} className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase truncate">Weight (g)</th>
+                <th style={{ width: 110 }} className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase truncate">Weight S/N</th>
+                <th style={{ width: 70 }} className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase truncate">Class</th>
+                <th style={{ width: 130 }} className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase truncate">Supplier</th>
+                <th style={{ width: 90 }} className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase truncate">MPE (mg.)</th>
+                <th style={{ width: 110 }} className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase truncate">Calibrate Date</th>
+                <th style={{ width: 110 }} className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase truncate">Calibrate By</th>
+                <th style={{ width: 150 }} className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase truncate">Certificate Report No.</th>
+                <th style={{ width: 130 }} className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase truncate">Conventional Mass (mg.)</th>
+                <th style={{ width: 110 }} className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase truncate">Uncertainty (mg.)</th>
+                <th style={{ width: 90 }} className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase truncate">Status</th>
+                <th style={{ width: 80 }} className="px-3 py-3 text-center text-[10px] font-medium text-gray-400 uppercase truncate">จัดการ</th>
               </tr>
             </thead>
             <tbody>
@@ -125,18 +123,18 @@ export default function WeightsPage() {
                 const st = wtStatus(w.uncertainty, w.mpe)
                 return (
                   <tr key={w.sn} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-3 py-3 text-gray-600 whitespace-nowrap">{sec?.name ?? w.sectionCode ?? '—'}</td>
-                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{w.weightG}</td>
-                    <td className="px-3 py-3 font-mono text-blue-600 font-semibold whitespace-nowrap">{w.sn}</td>
-                    <td className="px-3 py-3 whitespace-nowrap"><span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px]">{w.class_}</span></td>
+                    <td className="px-3 py-3 text-gray-600 truncate">{sec?.name ?? w.sectionCode ?? '—'}</td>
+                    <td className="px-3 py-3 text-right tabular-nums truncate">{w.weightG}</td>
+                    <td className="px-3 py-3 font-mono text-blue-600 font-semibold truncate">{w.sn}</td>
+                    <td className="px-3 py-3 truncate"><span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px]">{w.class_}</span></td>
                     <td className="px-3 py-3 text-gray-600 truncate">{w.supplier || '—'}</td>
-                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{w.mpe}</td>
-                    <td className="px-3 py-3 text-gray-500 whitespace-nowrap">{fmtDate(w.calDate)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums truncate">{w.mpe}</td>
+                    <td className="px-3 py-3 text-gray-500 truncate">{fmtDate(w.calDate)}</td>
                     <td className="px-3 py-3 text-gray-600 truncate">{w.calBy || '—'}</td>
                     <td className="px-3 py-3 text-gray-500 truncate">{w.certNo || '—'}</td>
-                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{w.convMass}</td>
-                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{w.uncertainty}</td>
-                    <td className="px-3 py-3 whitespace-nowrap">
+                    <td className="px-3 py-3 text-right tabular-nums truncate">{w.convMass}</td>
+                    <td className="px-3 py-3 text-right tabular-nums truncate">{w.uncertainty}</td>
+                    <td className="px-3 py-3 truncate">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${st === 'Pass' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{st}</span>
                     </td>
                     <td className="px-3 py-3">
@@ -181,10 +179,7 @@ export default function WeightsPage() {
                 <div><label className={lbl}>Weight (g)</label><input type="text" inputMode="decimal" onFocus={e => e.target.select()} className={inp} value={form.weightG} onChange={e => { const v = e.target.value; if (/^-?\d*\.?\d*$/.test(v)) setForm(f => ({ ...f, weightG: v })) }} /></div>
                 <div><label className={lbl}>Weight S/N *</label><input className={inp} value={form.sn} onChange={e => setForm(f => ({ ...f, sn: e.target.value }))} disabled={modal === 'edit'} /></div>
                 <div><label className={lbl}>Class</label>
-                  <input list="classSuggestions" className={inp} value={form.class_} onChange={e => setForm(f => ({ ...f, class_: e.target.value }))} placeholder="เช่น F1, F2, M1 ..." />
-                  <datalist id="classSuggestions">
-                    {CLASS_SUGGESTIONS.map(c => <option key={c} value={c} />)}
-                  </datalist>
+                  <input className={inp} value={form.class_} onChange={e => setForm(f => ({ ...f, class_: e.target.value }))} placeholder="เช่น F1, F2, M1 ..." />
                 </div>
                 <div><label className={lbl}>Supplier</label><input className={inp} value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} /></div>
                 <div><label className={lbl}>MPE (mg.)</label><input type="text" inputMode="decimal" onFocus={e => e.target.select()} className={inp} value={form.mpe} onChange={e => { const v = e.target.value; if (/^-?\d*\.?\d*$/.test(v)) setForm(f => ({ ...f, mpe: v })) }} /></div>
