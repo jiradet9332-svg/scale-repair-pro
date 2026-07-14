@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: 'Inter', 'Noto Sans Thai', system-ui, sans-serif;
+}
+
+html { font-family: var(--font-sans); }
+
+body {
+  background: #f8f9fa;
+  color: #1a1a1a;
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #bbb; }
+
+* {
+  transition-property: color, background-color, border-color;
+  transition-duration: 100ms;
+}

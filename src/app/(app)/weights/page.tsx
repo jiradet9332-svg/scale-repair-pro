@@ -1,0 +1,183 @@
+'use client'
+import { useState, useEffect, useMemo } from 'react'
+import { getWeights, createWeight, updateWeight, deleteWeight, getSections } from '@/lib/store'
+import { fmtDate, cpStatus } from '@/lib/utils'
+import type { Weight } from '@/lib/mockData'
+
+const PAGE = 15
+const empty = (): Weight => ({
+  sn: '', sectionCode: '', weightG: 0, class_: 'F1', supplier: '',
+  mpe: 0, calDate: '', calBy: '', certNo: '', convMass: 0, uncertainty: 0, status: 'Pass',
+})
+
+export default function WeightsPage() {
+  const [weights, setWeights] = useState<Weight[]>([])
+
+  useEffect(() => { setWeights([...getWeights()]) }, [])
+  const sections = getSections()
+  const [q, setQ]             = useState('')
+  const [fStatus, setFStatus] = useState('')
+  const [page, setPage]       = useState(1)
+  const [modal, setModal]     = useState<'add' | 'edit' | null>(null)
+  const [editSn, setEditSn]   = useState('')
+  const [form, setForm]       = useState(empty())
+
+  const filtered = useMemo(() => weights.filter(w => {
+    const mq = !q || [w.sn, w.supplier, w.certNo].some(v => v.toLowerCase().includes(q.toLowerCase()))
+    const ms = !fStatus || w.status === fStatus
+    return mq && ms
+  }), [weights, q, fStatus])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE))
+  const pageData   = filtered.slice((page - 1) * PAGE, page * PAGE)
+
+  function openAdd()  { setForm(empty()); setEditSn(''); setModal('add') }
+  function openEdit(w: Weight) { setForm({ ...w }); setEditSn(w.sn); setModal('edit') }
+
+  function save() {
+    const sn = form.sn.trim()
+    if (!sn) { alert('กรุณากรอกหมายเลข S/N'); return }
+    if (modal === 'add') {
+      const res = createWeight({ ...form, sn })
+      if (!res) { alert('S/N นี้มีอยู่แล้ว'); return }
+    } else {
+      updateWeight(editSn, { ...form })
+    }
+    setWeights([...getWeights()])
+    setModal(null)
+  }
+
+  function del(sn: string) {
+    if (!confirm(`ลบลูกตุ้ม "${sn}" ?`)) return
+    deleteWeight(sn)
+    setWeights([...getWeights()])
+  }
+
+  const inp = 'w-full h-9 px-3 border border-gray-200 rounded-lg text-[12.5px] bg-gray-50 text-gray-800 outline-none focus:border-blue-400'
+  const lbl = 'block text-[11px] font-medium text-gray-500 mb-1'
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-[15px] font-semibold text-gray-900">ทะเบียนลูกตุ้มน้ำหนักมาตรฐาน</h1>
+          <p className="text-[11px] text-gray-400 mt-0.5">{filtered.length} รายการ</p>
+        </div>
+        <button onClick={openAdd} className="flex items-center gap-1.5 h-8 px-3.5 bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-medium rounded-lg transition-colors">
+          <i className="ti ti-plus text-[15px]" /> เพิ่มลูกตุ้ม
+        </button>
+      </div>
+
+      <div className="flex gap-2 mb-4">
+        <input type="text" placeholder="ค้นหา S/N, ผู้จำหน่าย, เลขเซอร์..." value={q} onChange={e => { setQ(e.target.value); setPage(1) }}
+          className="flex-1 text-[12px] px-3 py-2 border border-gray-200 rounded-lg bg-white outline-none focus:border-blue-400" />
+        <select value={fStatus} onChange={e => { setFStatus(e.target.value); setPage(1) }}
+          className="text-[12px] px-3 py-2 border border-gray-200 rounded-lg bg-white outline-none">
+          <option value="">ทุกสถานะ</option>
+          <option value="Pass">Pass</option>
+          <option value="Not pass">Not pass</option>
+        </select>
+      </div>
+
+      <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12px]" style={{ tableLayout: 'fixed' }}>
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase w-28">S/N</th>
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase w-24">แผนก</th>
+                <th className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase w-20">น้ำหนัก (g)</th>
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase w-16">Class</th>
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase w-28">ผู้จำหน่าย</th>
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase w-24">วันที่สอบเทียบ</th>
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase w-28">เลขที่เซอร์</th>
+                <th className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase w-20">สถานะ</th>
+                <th className="px-3 py-3 text-center text-[10px] font-medium text-gray-400 uppercase w-16">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageData.length === 0 ? (
+                <tr><td colSpan={9} className="py-14 text-center text-gray-400 text-[12px]">ยังไม่มีข้อมูลลูกตุ้ม — กด &quot;+ เพิ่มลูกตุ้ม&quot; เพื่อเริ่มต้น</td></tr>
+              ) : pageData.map(w => {
+                const sec = sections.find(s => s.code === w.sectionCode)
+                return (
+                  <tr key={w.sn} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="px-3 py-3 font-mono text-blue-600 font-semibold">{w.sn}</td>
+                    <td className="px-3 py-3 text-gray-600">{sec?.name ?? w.sectionCode ?? '—'}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">{w.weightG}</td>
+                    <td className="px-3 py-3"><span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px]">{w.class_}</span></td>
+                    <td className="px-3 py-3 text-gray-600 truncate">{w.supplier || '—'}</td>
+                    <td className="px-3 py-3 text-gray-500">{fmtDate(w.calDate)}</td>
+                    <td className="px-3 py-3 text-gray-500 truncate">{w.certNo || '—'}</td>
+                    <td className="px-3 py-3">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${w.status === 'Pass' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{w.status}</span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex justify-center gap-1.5">
+                        <button onClick={() => openEdit(w)} className="w-6 h-6 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-100 text-gray-500"><i className="ti ti-edit text-[12px]" /></button>
+                        <button onClick={() => del(w.sn)} className="w-6 h-6 flex items-center justify-center border border-gray-200 rounded hover:bg-red-50 hover:border-red-200 hover:text-red-500 text-gray-400"><i className="ti ti-trash text-[12px]" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100 bg-gray-50">
+          <span className="text-[12px] text-gray-400">หน้า {page} / {totalPages} ({filtered.length} รายการ)</span>
+          <div className="flex gap-1">
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="w-7 h-7 flex items-center justify-center border border-gray-200 rounded text-gray-500 disabled:opacity-30 text-[12px]">‹</button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+              <button key={p} onClick={() => setPage(p)} className={`w-7 h-7 flex items-center justify-center border rounded text-[12px] ${page === p ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-600'}`}>{p}</button>
+            ))}
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="w-7 h-7 flex items-center justify-center border border-gray-200 rounded text-gray-500 disabled:opacity-30 text-[12px]">›</button>
+          </div>
+        </div>
+      </div>
+
+      {modal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl border border-gray-200 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-[14px] font-medium">{modal === 'add' ? 'เพิ่มลูกตุ้มใหม่' : 'แก้ไขลูกตุ้ม'}</h2>
+              <button onClick={() => setModal(null)} className="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-400"><i className="ti ti-x text-[15px]" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className={lbl}>S/N *</label><input className={inp} value={form.sn} onChange={e => setForm(f => ({ ...f, sn: e.target.value }))} disabled={modal === 'edit'} /></div>
+                <div><label className={lbl}>แผนก</label>
+                  <select className={inp} value={form.sectionCode} onChange={e => setForm(f => ({ ...f, sectionCode: e.target.value }))}>
+                    <option value="">— เลือกแผนก —</option>
+                    {sections.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
+                  </select></div>
+                <div><label className={lbl}>น้ำหนัก (g)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.weightG || ''} onChange={e => setForm(f => ({ ...f, weightG: Number(e.target.value) }))} /></div>
+                <div><label className={lbl}>Class</label>
+                  <select className={inp} value={form.class_} onChange={e => setForm(f => ({ ...f, class_: e.target.value }))}>
+                    {['E1','E2','F1','F2','M1','M2','M3'].map(c => <option key={c} value={c}>{c}</option>)}
+                  </select></div>
+                <div><label className={lbl}>MPE (mg)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.mpe || ''} onChange={e => setForm(f => ({ ...f, mpe: Number(e.target.value) }))} /></div>
+                <div><label className={lbl}>Conventional Mass (g)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.convMass || ''} onChange={e => setForm(f => ({ ...f, convMass: Number(e.target.value) }))} /></div>
+                <div><label className={lbl}>Uncertainty (mg)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.uncertainty || ''} onChange={e => setForm(f => ({ ...f, uncertainty: Number(e.target.value) }))} /></div>
+                <div><label className={lbl}>ผู้จำหน่าย</label><input className={inp} value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} /></div>
+                <div><label className={lbl}>วันที่สอบเทียบ</label><input type="date" className={inp} value={form.calDate} onChange={e => setForm(f => ({ ...f, calDate: e.target.value }))} /></div>
+                <div><label className={lbl}>สอบเทียบโดย</label><input className={inp} value={form.calBy} onChange={e => setForm(f => ({ ...f, calBy: e.target.value }))} /></div>
+                <div><label className={lbl}>เลขที่เซอร์ติฟิเคต</label><input className={inp} value={form.certNo} onChange={e => setForm(f => ({ ...f, certNo: e.target.value }))} /></div>
+                <div><label className={lbl}>สถานะ</label>
+                  <select className={inp} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as 'Pass'|'Not pass' }))}>
+                    <option value="Pass">Pass</option>
+                    <option value="Not pass">Not pass</option>
+                  </select></div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50">
+              <button onClick={() => setModal(null)} className="h-8 px-4 border border-gray-200 rounded-lg text-[12px] text-gray-600 hover:bg-gray-100">ยกเลิก</button>
+              <button onClick={save} className="h-8 px-4 bg-blue-600 text-white text-[12px] font-medium rounded-lg hover:bg-blue-700">บันทึก</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

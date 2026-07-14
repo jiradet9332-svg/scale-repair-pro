@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Department {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  sections  Section[]
+  createdAt DateTime  @default(now())
+}
+
+model Section {
+  id           Int        @id @default(autoincrement())
+  name         String
+  code         String     @default("")
+  department   Department @relation(fields: [departmentId], references: [id])
+  departmentId Int
+  scales       Scale[]
+  createdAt    DateTime   @default(now())
+
+  @@unique([name, departmentId])
+}
+
+model Scale {
+  id           Int         @id @default(autoincrement())
+  code         String      @unique  // Scale ID: [SC]-[BR]-[UU]-[NNN]
+  sectionCode  String                // Section code part
+  brandCode    String                // Brand code part
+  usageCount   Int         @default(0)
+  seqNumber    Int                   // sequence number 001..
+  brand        String
+  model        String
+  scaleType    String?
+  capacity     String      @default("")
+  unit         String      @default("kg")
+  section      Section     @relation(fields: [sectionId], references: [id])
+  sectionId    Int
+  startDate    DateTime?
+  endDate      DateTime?
+  machinePrice Decimal?    @db.Decimal(12, 2)
+  status       ScaleStatus @default(ACTIVE)
+  repairJobs   RepairJob[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model Technician {
+  id         Int         @id @default(autoincrement())
+  name       String
+  phone      String?
+  email      String?
+  active     Boolean     @default(true)
+  repairJobs RepairJob[]
+  createdAt  DateTime    @default(now())
+}
+
+model Part {
+  id           Int             @id @default(autoincrement())
+  code         String          @unique
+  name         String
+  unitPrice    Decimal         @db.Decimal(10, 2)
+  stock        Int             @default(0)
+  unit         String          @default("ชิ้น")
+  repairParts  RepairPart[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model RepairJob {
+  id            Int          @id @default(autoincrement())
+  pmiiNumber    String       @unique
+  reportedAt    DateTime     @default(now())
+  startTime     DateTime?
+  endTime       DateTime?
+  scale         Scale        @relation(fields: [scaleId], references: [id])
+  scaleId       Int
+  technician    Technician?  @relation(fields: [technicianId], references: [id])
+  technicianId  Int?
+  repairType    RepairType
+  symptom       String       @db.Text
+  errorCode     String?
+  urgency       Urgency      @default(NORMAL)
+  status        RepairStatus @default(PENDING)
+  parts         RepairPart[]
+  totalPartCost Decimal      @default(0) @db.Decimal(10, 2)
+  note          String?      @db.Text
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model RepairPart {
+  id          Int       @id @default(autoincrement())
+  repairJob   RepairJob @relation(fields: [repairJobId], references: [id], onDelete: Cascade)
+  repairJobId Int
+  part        Part      @relation(fields: [partId], references: [id])
+  partId      Int
+  quantity    Int
+  unitPrice   Decimal   @db.Decimal(10, 2)
+  totalPrice  Decimal   @db.Decimal(10, 2)
+  createdAt   DateTime  @default(now())
+}
+
+enum ScaleStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum RepairType {
+  REPLACE_PART
+  EXTERNAL_REPAIR
+  CALIBRATE
+}
+
+enum Urgency {
+  NORMAL
+  URGENT
+  CRITICAL
+}
+
+enum RepairStatus {
+  PENDING
+  IN_PROGRESS
+  WAITING_PART
+  SENT_EXTERNAL
+  DONE
+  CANCELLED
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  name      String
+  email     String?
+  role      UserRole @default(TECHNICIAN)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum UserRole {
+  ADMIN
+  SUPERVISOR
+  TECHNICIAN
+  VIEWER
+}
