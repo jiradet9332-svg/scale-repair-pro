@@ -5,10 +5,22 @@ import { fmtDate, cpStatus, wtStatus } from '@/lib/utils'
 import type { Weight } from '@/lib/mockData'
 
 const PAGE = 15
-const empty = (): Weight => ({
-  sn: '', sectionCode: '', weightG: 0, class_: 'F1', supplier: '',
-  mpe: 0, calDate: '', calBy: '', certNo: '', convMass: 0, uncertainty: 0, status: 'Pass',
+const CLASS_SUGGESTIONS = ['E1', 'E2', 'F1', 'F2', 'M1', 'M2', 'M3']
+
+// ฟอร์มเก็บช่องตัวเลขเป็น string ระหว่างพิมพ์ (กันปัญหาเลข 0 นำหน้าหาย เช่น 0.3 กลายเป็น .3)
+type WeightFormState = Omit<Weight, 'weightG' | 'mpe' | 'convMass' | 'uncertainty'> & {
+  weightG: string
+  mpe: string
+  convMass: string
+  uncertainty: string
+}
+
+const empty = (): WeightFormState => ({
+  sn: '', sectionCode: '', weightG: '', class_: 'F1', supplier: '',
+  mpe: '', calDate: '', calBy: '', certNo: '', convMass: '', uncertainty: '', status: 'Pass',
 })
+
+const toNum = (s: string) => { const n = parseFloat(s); return Number.isFinite(n) ? n : 0 }
 
 export default function WeightsPage() {
   const [weights, setWeights] = useState<Weight[]>([])
@@ -32,17 +44,22 @@ export default function WeightsPage() {
   const pageData = filtered.slice((page - 1) * PAGE, page * PAGE)
 
   function openAdd() { setForm(empty()); setEditSn(''); setModal('add') }
-  function openEdit(w: Weight) { setForm({ ...w }); setEditSn(w.sn); setModal('edit') }
+  function openEdit(w: Weight) {
+    setForm({ ...w, weightG: String(w.weightG || ''), mpe: String(w.mpe || ''), convMass: String(w.convMass || ''), uncertainty: String(w.uncertainty || '') })
+    setEditSn(w.sn); setModal('edit')
+  }
 
   function save() {
     const sn = form.sn.trim()
     if (!sn) { alert('กรุณากรอกหมายเลข S/N'); return }
-    const status = wtStatus(form.uncertainty, form.mpe)
+    const weightG = toNum(form.weightG), mpe = toNum(form.mpe), convMass = toNum(form.convMass), uncertainty = toNum(form.uncertainty)
+    const status = wtStatus(uncertainty, mpe)
+    const payload: Weight = { ...form, sn, weightG, mpe, convMass, uncertainty, status }
     if (modal === 'add') {
-      const res = createWeight({ ...form, sn, status })
+      const res = createWeight(payload)
       if (!res) { alert('S/N นี้มีอยู่แล้ว'); return }
     } else {
-      updateWeight(editSn, { ...form, status })
+      updateWeight(editSn, payload)
     }
     setWeights([...getWeights()])
     setModal(null)
@@ -161,23 +178,25 @@ export default function WeightsPage() {
                     <option value="">— เลือกจากทะเบียน —</option>
                     {sections.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
                   </select></div>
-                <div><label className={lbl}>Weight (g)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.weightG || ''} onChange={e => setForm(f => ({ ...f, weightG: Number(e.target.value) }))} /></div>
+                <div><label className={lbl}>Weight (g)</label><input type="text" inputMode="decimal" onFocus={e => e.target.select()} className={inp} value={form.weightG} onChange={e => { const v = e.target.value; if (/^-?\d*\.?\d*$/.test(v)) setForm(f => ({ ...f, weightG: v })) }} /></div>
                 <div><label className={lbl}>Weight S/N *</label><input className={inp} value={form.sn} onChange={e => setForm(f => ({ ...f, sn: e.target.value }))} disabled={modal === 'edit'} /></div>
                 <div><label className={lbl}>Class</label>
-                  <select className={inp} value={form.class_} onChange={e => setForm(f => ({ ...f, class_: e.target.value }))}>
-                    {['E1', 'E2', 'F1', 'F2', 'M1', 'M2', 'M3'].map(c => <option key={c} value={c}>{c}</option>)}
-                  </select></div>
+                  <input list="classSuggestions" className={inp} value={form.class_} onChange={e => setForm(f => ({ ...f, class_: e.target.value }))} placeholder="เช่น F1, F2, M1 ..." />
+                  <datalist id="classSuggestions">
+                    {CLASS_SUGGESTIONS.map(c => <option key={c} value={c} />)}
+                  </datalist>
+                </div>
                 <div><label className={lbl}>Supplier</label><input className={inp} value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} /></div>
-                <div><label className={lbl}>MPE (mg.)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.mpe || ''} onChange={e => setForm(f => ({ ...f, mpe: Number(e.target.value) }))} /></div>
+                <div><label className={lbl}>MPE (mg.)</label><input type="text" inputMode="decimal" onFocus={e => e.target.select()} className={inp} value={form.mpe} onChange={e => { const v = e.target.value; if (/^-?\d*\.?\d*$/.test(v)) setForm(f => ({ ...f, mpe: v })) }} /></div>
                 <div><label className={lbl}>Calibrate Date</label><input type="date" className={inp} value={form.calDate} onChange={e => setForm(f => ({ ...f, calDate: e.target.value }))} /></div>
                 <div><label className={lbl}>Calibrate By</label><input className={inp} value={form.calBy} onChange={e => setForm(f => ({ ...f, calBy: e.target.value }))} /></div>
                 <div><label className={lbl}>Certificate Report No.</label><input className={inp} value={form.certNo} onChange={e => setForm(f => ({ ...f, certNo: e.target.value }))} /></div>
-                <div><label className={lbl}>Conventional Mass (mg.)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.convMass || ''} onChange={e => setForm(f => ({ ...f, convMass: Number(e.target.value) }))} /></div>
-                <div><label className={lbl}>Uncertainty (mg.)</label><input type="number" onFocus={e => e.target.select()} className={inp} value={form.uncertainty || ''} onChange={e => setForm(f => ({ ...f, uncertainty: Number(e.target.value) }))} /></div>
+                <div><label className={lbl}>Conventional Mass (mg.)</label><input type="text" inputMode="decimal" onFocus={e => e.target.select()} className={inp} value={form.convMass} onChange={e => { const v = e.target.value; if (/^-?\d*\.?\d*$/.test(v)) setForm(f => ({ ...f, convMass: v })) }} /></div>
+                <div><label className={lbl}>Uncertainty (mg.)</label><input type="text" inputMode="decimal" onFocus={e => e.target.select()} className={inp} value={form.uncertainty} onChange={e => { const v = e.target.value; if (/^-?\d*\.?\d*$/.test(v)) setForm(f => ({ ...f, uncertainty: v })) }} /></div>
                 <div><label className={lbl}>Status (คำนวณอัตโนมัติ)</label>
                   <div className={`${inp} flex items-center bg-gray-100`}>
-                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${wtStatus(form.uncertainty, form.mpe) === 'Pass' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                      {wtStatus(form.uncertainty, form.mpe)}
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${wtStatus(toNum(form.uncertainty), toNum(form.mpe)) === 'Pass' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                      {wtStatus(toNum(form.uncertainty), toNum(form.mpe))}
                     </span>
                   </div>
                 </div>
