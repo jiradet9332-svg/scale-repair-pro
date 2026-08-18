@@ -34,6 +34,7 @@ const navGroups = [
     items: [
       { href: '/scales', icon: 'ti-scale', label: 'Scale Register' },
       { href: '/weights', icon: 'ti-weight', label: 'Test Weight Register' },
+      { href: '/weightsets', icon: 'ti-stack-2', label: 'Weight Set Register' },
       { href: '/sections', icon: 'ti-building-factory', label: 'Departments' },
       { href: '/parts', icon: 'ti-package', label: 'Spare Parts' },
       { href: '/vendors', icon: 'ti-truck', label: 'Vendors' },

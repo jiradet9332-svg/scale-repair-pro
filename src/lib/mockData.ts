@@ -2,8 +2,8 @@
 // ใช้แทน Database ชั่วคราว  เมื่อพร้อมต่อ DB ให้ลบไฟล์นี้และแก้ page/api ต่างๆ
 
 // ─── ENUMS ───────────────────────────────────────────────────────────────────
-export type ScaleStatus   = 'Active' | 'Inactive'
-export type RepairType    = 'self' | 'ext' | 'both'
+export type ScaleStatus = 'Active' | 'Inactive'
+export type RepairType = 'self' | 'ext' | 'both'
 
 // ─── INTERFACES ──────────────────────────────────────────────────────────────
 export interface Section {
@@ -34,6 +34,9 @@ export interface Scale {
   endDate: string
   purchasePrice: number
   status: ScaleStatus
+  weightSetId: string    // foreign key → WeightSet.id — ชุดตุ้มน้ำหนักที่ใช้สอบเทียบเครื่องนี้
+  intervalMonths: number // ความถี่สอบเทียบ (เดือน) เช่น 12
+  capacity: number       // พิกัดสูงสุดของเครื่องนี้ (g) — ผู้ใช้กรอกเอง
 }
 
 export interface RepairPart {
@@ -94,6 +97,13 @@ export interface Weight {
   convMass: number
   uncertainty: number
   status: 'Pass' | 'Not pass'
+}
+
+// ─── ชุดตุ้มน้ำหนักมาตรฐาน (สำหรับหน้าบันทึกสอบเทียบเครื่องชั่ง) ─────────────
+export interface WeightSet {
+  id: string          // เช่น WS-01
+  name: string        // ชื่อชุด (ว่างได้) เช่น "แผนกบรรจุ"
+  values: number[]    // ค่าน้ำหนักแต่ละจุด หน่วยกรัม เรียงจากน้อยไปมาก
 }
 
 export interface CalPlan {

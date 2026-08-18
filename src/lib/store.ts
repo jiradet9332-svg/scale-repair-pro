@@ -5,7 +5,7 @@
 
 import type {
   Scale, RepairJob, Part, User, Section,
-  Vendor, Weight, CalPlan, RepairPart, ExtItem, CalibrationRecord,
+  Vendor, Weight, CalPlan, RepairPart, ExtItem, CalibrationRecord, WeightSet,
 } from './mockData'
 import seedData from './seedData.json'
 
@@ -14,33 +14,58 @@ let _hydrated = false
 
 // ─── DEFAULT CAL PLAN DATA (ใช้เมื่อไม่มีข้อมูลสอบเทียบมาพร้อม seed) ─────────
 const FALLBACK_CALPLAN: CalPlan[] = [
-  { id:'CP-S-001', group:'scale', department:'ฝ่ายผลิต Line 1', location:'ทำเส้น Line 1',  type:'สปริง 60 kg.',   qty:2,  intervalMonths:12, lastCal:'2026-05-01' },
-  { id:'CP-S-002', group:'scale', department:'ฝ่ายผลิต Line 1', location:'อบเส้น Line 1',  type:'SUPER-3S',        qty:44, intervalMonths:12, lastCal:'2026-05-01' },
-  { id:'CP-S-003', group:'scale', department:'ฝ่ายผลิต Line 1', location:'บรรจุ Line 1',   type:'Digital 10 kg.', qty:2,  intervalMonths:12, lastCal:'2026-05-01' },
-  { id:'CP-S-004', group:'scale', department:'ฝ่ายผลิต Line 2', location:'ทำเส้น Line 2',  type:'สปริง 60 kg.',   qty:2,  intervalMonths:12, lastCal:'2026-06-01' },
-  { id:'CP-S-005', group:'scale', department:'ฝ่ายผลิต Line 2', location:'อบเส้น Line 2',  type:'SUPER-3S',        qty:33, intervalMonths:12, lastCal:'2026-06-01' },
-  { id:'CP-S-006', group:'scale', department:'ฝ่ายผลิต Line 3', location:'บรรจุเส้นสด L3', type:'SDS',             qty:135,intervalMonths:12, lastCal:'2026-08-01' },
-  { id:'CP-S-007', group:'scale', department:'ฝ่ายผลิต Line 4', location:'ผลิต กต. L4',    type:'Digital 60 kg.', qty:4,  intervalMonths:12, lastCal:'2026-09-01' },
-  { id:'CP-W-001', group:'weight',department:'ฝ่ายวิศวกรรม',    location:'ตุ้มน้ำหนัก (Standard)', type:'ตุ้มมาตรฐาน', qty:22, intervalMonths:12, lastCal:'2026-06-01' },
-  { id:'CP-W-002', group:'weight',department:'ฝ่ายผลิต',        location:'แผนกบรรจุ Line 1', type:'ตุ้มน้ำหนัก',   qty:6,  intervalMonths:12, lastCal:'2026-04-01' },
-  { id:'CP-W-003', group:'weight',department:'ฝ่ายผลิต',        location:'แผนกอบเส้น Line 4', type:'ตุ้มน้ำหนัก',  qty:7,  intervalMonths:12, lastCal:'2026-01-10' },
+  { id: 'CP-S-001', group: 'scale', department: 'ฝ่ายผลิต Line 1', location: 'ทำเส้น Line 1', type: 'สปริง 60 kg.', qty: 2, intervalMonths: 12, lastCal: '2026-05-01' },
+  { id: 'CP-S-002', group: 'scale', department: 'ฝ่ายผลิต Line 1', location: 'อบเส้น Line 1', type: 'SUPER-3S', qty: 44, intervalMonths: 12, lastCal: '2026-05-01' },
+  { id: 'CP-S-003', group: 'scale', department: 'ฝ่ายผลิต Line 1', location: 'บรรจุ Line 1', type: 'Digital 10 kg.', qty: 2, intervalMonths: 12, lastCal: '2026-05-01' },
+  { id: 'CP-S-004', group: 'scale', department: 'ฝ่ายผลิต Line 2', location: 'ทำเส้น Line 2', type: 'สปริง 60 kg.', qty: 2, intervalMonths: 12, lastCal: '2026-06-01' },
+  { id: 'CP-S-005', group: 'scale', department: 'ฝ่ายผลิต Line 2', location: 'อบเส้น Line 2', type: 'SUPER-3S', qty: 33, intervalMonths: 12, lastCal: '2026-06-01' },
+  { id: 'CP-S-006', group: 'scale', department: 'ฝ่ายผลิต Line 3', location: 'บรรจุเส้นสด L3', type: 'SDS', qty: 135, intervalMonths: 12, lastCal: '2026-08-01' },
+  { id: 'CP-S-007', group: 'scale', department: 'ฝ่ายผลิต Line 4', location: 'ผลิต กต. L4', type: 'Digital 60 kg.', qty: 4, intervalMonths: 12, lastCal: '2026-09-01' },
+  { id: 'CP-W-001', group: 'weight', department: 'ฝ่ายวิศวกรรม', location: 'ตุ้มน้ำหนัก (Standard)', type: 'ตุ้มมาตรฐาน', qty: 22, intervalMonths: 12, lastCal: '2026-06-01' },
+  { id: 'CP-W-002', group: 'weight', department: 'ฝ่ายผลิต', location: 'แผนกบรรจุ Line 1', type: 'ตุ้มน้ำหนัก', qty: 6, intervalMonths: 12, lastCal: '2026-04-01' },
+  { id: 'CP-W-003', group: 'weight', department: 'ฝ่ายผลิต', location: 'แผนกอบเส้น Line 4', type: 'ตุ้มน้ำหนัก', qty: 7, intervalMonths: 12, lastCal: '2026-01-10' },
 ]
 const DEFAULT_CALPLAN: CalPlan[] = (seedData as any).calplan?.length ? (seedData as any).calplan : FALLBACK_CALPLAN
+
+// เติมค่าเริ่มต้นให้เครื่องชั่งเก่าที่ยังไม่มีฟิลด์ใหม่ (weightSetId/intervalMonths/capacity)
+// เผื่อข้อมูลเดิมจาก seed หรือ localStorage ที่บันทึกไว้ก่อนเพิ่มฟีเจอร์นี้
+function normalizeScale(s: any): Scale {
+  return {
+    ...s,
+    weightSetId: s.weightSetId ?? '',
+    intervalMonths: s.intervalMonths ?? 12,
+    capacity: s.capacity ?? 0,
+  }
+}
+
+// ─── DEFAULT WEIGHT SETS (ชุดตุ้มน้ำหนักมาตรฐานตั้งต้น — ใช้เมื่อไม่มีข้อมูลมาพร้อม seed) ─
+const DEFAULT_WEIGHT_SETS: WeightSet[] = [
+  { id: 'WS-01', name: '', values: [2, 5, 10, 15] },
+  { id: 'WS-02', name: '', values: [5, 10, 15, 20, 25, 30] },
+  { id: 'WS-03', name: '', values: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50] },
+  { id: 'WS-04', name: '', values: [10, 15, 20, 25, 30, 35, 40, 45, 50] },
+  { id: 'WS-05', name: '', values: [10, 50, 100, 200, 250] },
+  { id: 'WS-06', name: '', values: [10, 50, 100, 500, 1000] },
+  { id: 'WS-07', name: '', values: [20, 50, 100, 200, 300] },
+  { id: 'WS-08', name: '', values: [100, 200, 300, 500] },
+  { id: 'WS-09', name: '', values: [200, 300, 500, 1000] },
+]
 
 // ─── STORE (ค่าเริ่มต้น = ข้อมูลจริงจาก seedData.json ที่นำเข้าไว้) ──────────
 function freshSeed() {
   const sd = seedData as any
   return {
-    sections:  (sd.sections  ?? []) as Section[],
-    vendors:   (sd.vendors   ?? []) as Vendor[],
-    scales:    (sd.scales    ?? []) as Scale[],
-    repairs:   (sd.repairs   ?? []) as RepairJob[],
-    parts:     (sd.parts     ?? []) as Part[],
-    users:     (sd.users?.length ? sd.users : [
+    sections: (sd.sections ?? []) as Section[],
+    vendors: (sd.vendors ?? []) as Vendor[],
+    scales: ((sd.scales ?? []) as any[]).map(normalizeScale),
+    repairs: (sd.repairs ?? []) as RepairJob[],
+    parts: (sd.parts ?? []) as Part[],
+    users: (sd.users?.length ? sd.users : [
       { username: 'admin', password: '1234', fullname: 'ผู้ดูแลระบบ', role: 'admin' as const },
     ]) as User[],
-    weights:   (sd.weights   ?? []) as Weight[],
-    calplan:   DEFAULT_CALPLAN,
+    weights: (sd.weights ?? []) as Weight[],
+    weightSets: (sd.weightSets?.length ? sd.weightSets : DEFAULT_WEIGHT_SETS) as WeightSet[],
+    calplan: DEFAULT_CALPLAN,
     calibrations: [] as CalibrationRecord[],
     _repairSeq: 0,
   }
@@ -67,14 +92,15 @@ export function hydrate(): boolean {
     if (raw) {
       const saved = JSON.parse(raw)
       store = {
-        sections:   saved.sections   ?? [],
-        vendors:    saved.vendors    ?? [],
-        scales:     saved.scales     ?? [],
-        repairs:    saved.repairs    ?? [],
-        parts:      saved.parts      ?? [],
-        users:      saved.users?.length ? saved.users : store.users,
-        weights:    saved.weights    ?? [],
-        calplan:    saved.calplan?.length ? saved.calplan : DEFAULT_CALPLAN,
+        sections: saved.sections ?? [],
+        vendors: saved.vendors ?? [],
+        scales: (saved.scales ?? []).map(normalizeScale),
+        repairs: saved.repairs ?? [],
+        parts: saved.parts ?? [],
+        users: saved.users?.length ? saved.users : store.users,
+        weights: saved.weights ?? [],
+        weightSets: saved.weightSets?.length ? saved.weightSets : DEFAULT_WEIGHT_SETS,
+        calplan: saved.calplan?.length ? saved.calplan : DEFAULT_CALPLAN,
         calibrations: saved.calibrations ?? [],
         _repairSeq: saved._repairSeq ?? 0,
       }
@@ -91,7 +117,7 @@ export function clearAllData() {
   store = {
     sections: [], vendors: [], scales: [], repairs: [], parts: [],
     users: [{ username: 'admin', password: '1234', fullname: 'ผู้ดูแลระบบ', role: 'admin' as const }],
-    weights: [], calplan: DEFAULT_CALPLAN, calibrations: [], _repairSeq: 0,
+    weights: [], weightSets: DEFAULT_WEIGHT_SETS, calplan: DEFAULT_CALPLAN, calibrations: [], _repairSeq: 0,
   }
   persist()
 }
@@ -108,10 +134,10 @@ export function buildScaleCode(sc: string, bc: string, uc: number, seq: number) 
 export function parseScaleCode(code: string) {
   const parts = (code || '').split('-')
   if (parts.length < 4) return null
-  const gen    = parseInt(parts[parts.length - 2], 10)
+  const gen = parseInt(parts[parts.length - 2], 10)
   const serial = parts[parts.length - 1]
   const prefix = parts.slice(0, parts.length - 2).join('-')
-  return { prefix, gen, genStr: String(gen).padStart(2,'0'), serial }
+  return { prefix, gen, genStr: String(gen).padStart(2, '0'), serial }
 }
 
 export function genRepairId(): string {
@@ -126,9 +152,9 @@ export function genRepairId(): string {
 }
 
 // ─── SECTIONS ─────────────────────────────────────────────────────────────────
-export function getSections()                   { return store.sections }
-export function getSectionByCode(code: string)  { return store.sections.find(s => s.code === code) ?? null }
-export function getUniqueDepts()                { return [...new Set(store.sections.map(s => s.dept).filter(Boolean))].sort() }
+export function getSections() { return store.sections }
+export function getSectionByCode(code: string) { return store.sections.find(s => s.code === code) ?? null }
+export function getUniqueDepts() { return [...new Set(store.sections.map(s => s.dept).filter(Boolean))].sort() }
 
 export function createSection(data: Section) {
   if (store.sections.find(s => s.code === data.code)) return null
@@ -150,8 +176,8 @@ export function deleteSection(code: string) {
 }
 
 // ─── VENDORS ──────────────────────────────────────────────────────────────────
-export function getVendors()                    { return store.vendors }
-export function getVendorByCode(code: string)   { return store.vendors.find(v => v.code === code) ?? null }
+export function getVendors() { return store.vendors }
+export function getVendorByCode(code: string) { return store.vendors.find(v => v.code === code) ?? null }
 
 export function createVendor(data: Vendor) {
   if (store.vendors.find(v => v.code === data.code)) return null
@@ -173,9 +199,9 @@ export function deleteVendor(code: string) {
 }
 
 // ─── SCALES ───────────────────────────────────────────────────────────────────
-export function getScales()                      { return store.scales }
-export function getScaleByCode(code: string)     { return store.scales.find(s => s.code === code) ?? null }
-export function getScaleById(id: number)         { return store.scales.find(s => s.id === id) ?? null }
+export function getScales() { return store.scales }
+export function getScaleByCode(code: string) { return store.scales.find(s => s.code === code) ?? null }
+export function getScaleById(id: number) { return store.scales.find(s => s.id === id) ?? null }
 export function getScaleFamily(code: string) {
   const p = parseScaleCode(code)
   if (!p) return []
@@ -228,7 +254,7 @@ export function replaceScale(oldCode: string, opts: {
   if (!old) return null
   const p = parseScaleCode(oldCode)
   if (!p) return null
-  const newCode = `${p.prefix}-${String(p.gen + 1).padStart(2,'0')}-${p.serial}`
+  const newCode = `${p.prefix}-${String(p.gen + 1).padStart(2, '0')}-${p.serial}`
   if (store.scales.find(s => s.code === newCode)) return null
   old.status = 'Inactive'
   old.endDate = opts.endOld
@@ -245,9 +271,9 @@ export function replaceScale(oldCode: string, opts: {
 }
 
 // ─── REPAIRS ──────────────────────────────────────────────────────────────────
-export function getRepairs()                       { return store.repairs }
-export function getRepairById(id: string)          { return store.repairs.find(r => r.repairId === id) ?? null }
-export function getRepairsByScale(code: string)    { return store.repairs.filter(r => r.scaleCode === code) }
+export function getRepairs() { return store.repairs }
+export function getRepairById(id: string) { return store.repairs.find(r => r.repairId === id) ?? null }
+export function getRepairsByScale(code: string) { return store.repairs.filter(r => r.scaleCode === code) }
 
 export function createRepair(data: Omit<RepairJob, 'repairId'>) {
   const r: RepairJob = { ...data, repairId: genRepairId() }
@@ -269,8 +295,8 @@ export function deleteRepair(id: string) {
 }
 
 // ─── PARTS ────────────────────────────────────────────────────────────────────
-export function getParts()                        { return store.parts }
-export function getPartByCode(code: string)       { return store.parts.find(p => p.code === code) ?? null }
+export function getParts() { return store.parts }
+export function getPartByCode(code: string) { return store.parts.find(p => p.code === code) ?? null }
 
 export function createPart(data: Part) {
   store.parts.push(data); persist(); return data
@@ -289,8 +315,8 @@ export function deletePart(code: string) {
 }
 
 // ─── USERS ────────────────────────────────────────────────────────────────────
-export function getUsers()                        { return store.users }
-export function getUserByUsername(u: string)      { return store.users.find(x => x.username === u) ?? null }
+export function getUsers() { return store.users }
+export function getUserByUsername(u: string) { return store.users.find(x => x.username === u) ?? null }
 
 export function createUser(data: User) {
   if (store.users.find(u => u.username === data.username)) return null
@@ -311,8 +337,8 @@ export function deleteUser(username: string) {
 }
 
 // ─── WEIGHTS ──────────────────────────────────────────────────────────────────
-export function getWeights()                      { return store.weights }
-export function getWeightBySn(sn: string)         { return store.weights.find(w => w.sn === sn) ?? null }
+export function getWeights() { return store.weights }
+export function getWeightBySn(sn: string) { return store.weights.find(w => w.sn === sn) ?? null }
 
 export function createWeight(data: Weight) {
   if (store.weights.find(w => w.sn === data.sn)) return null
@@ -331,8 +357,42 @@ export function deleteWeight(sn: string) {
   store.weights.splice(i, 1); persist(); return true
 }
 
+// ─── WEIGHT SETS (ชุดตุ้มน้ำหนักมาตรฐาน — ใช้เลือกในหน้าบันทึกสอบเทียบเครื่องชั่ง) ─
+export function getWeightSets() { return store.weightSets }
+export function getWeightSetById(id: string) { return store.weightSets.find(w => w.id === id) ?? null }
+
+export function genWeightSetId(): string {
+  const nums = store.weightSets.map(w => { const m = w.id.match(/^WS-(\d+)$/); return m ? parseInt(m[1], 10) : 0 })
+  const max = nums.length ? Math.max(...nums) : 0
+  return `WS-${String(max + 1).padStart(2, '0')}`
+}
+
+export function createWeightSet(data: { id?: string; name: string; values: number[] }) {
+  const id = data.id?.trim() || genWeightSetId()
+  if (store.weightSets.find(w => w.id === id)) return null
+  if (!data.values.length) return null
+  const ws: WeightSet = { id, name: data.name.trim(), values: [...data.values].sort((a, b) => a - b) }
+  store.weightSets.push(ws)
+  persist()
+  return ws
+}
+export function updateWeightSet(id: string, data: Partial<Omit<WeightSet, 'id'>>) {
+  const i = store.weightSets.findIndex(w => w.id === id)
+  if (i < 0) return null
+  const values = data.values ? [...data.values].sort((a, b) => a - b) : store.weightSets[i].values
+  store.weightSets[i] = { ...store.weightSets[i], ...data, values }
+  persist()
+  return store.weightSets[i]
+}
+export function deleteWeightSet(id: string) {
+  if (store.weightSets.length <= 1) return false // ต้องเหลืออย่างน้อย 1 ชุดเสมอ ไม่ให้ลบจนว่างเปล่า
+  const i = store.weightSets.findIndex(w => w.id === id)
+  if (i < 0) return false
+  store.weightSets.splice(i, 1); persist(); return true
+}
+
 // ─── CAL PLAN ─────────────────────────────────────────────────────────────────
-export function getCalPlan()                      { return store.calplan }
+export function getCalPlan() { return store.calplan }
 
 export function addCalPlanItem(data: CalPlan) {
   store.calplan.push(data); persist(); return data
@@ -364,7 +424,7 @@ export function genCalCertNo(): string {
   return `CAL-${year}-${String(max + 1).padStart(4, '0')}`
 }
 
-export function getCalibrations()                     { return store.calibrations }
+export function getCalibrations() { return store.calibrations }
 export function getCalibrationByCertNo(certNo: string) { return store.calibrations.find(c => c.certNo === certNo) ?? null }
 export function getCalibrationsByAsset(assetId: string) {
   return store.calibrations.filter(c => c.assetId === assetId).sort((a, b) => b.date.localeCompare(a.date))
@@ -403,11 +463,11 @@ export function getDashboardStats(yearFilter?: string, deptFilter?: string, sect
     return true
   })
 
-  const totalCost  = filtered.reduce((s, r) => s + r.totalCost, 0)
-  const partCost   = filtered.reduce((s, r) => s + r.partCost, 0)
-  const extCost    = filtered.reduce((s, r) => s + r.externalCost, 0)
-  const active     = store.scales.filter(s => s.status === 'Active').length
-  const inactive   = store.scales.filter(s => s.status === 'Inactive').length
+  const totalCost = filtered.reduce((s, r) => s + r.totalCost, 0)
+  const partCost = filtered.reduce((s, r) => s + r.partCost, 0)
+  const extCost = filtered.reduce((s, r) => s + r.externalCost, 0)
+  const active = store.scales.filter(s => s.status === 'Active').length
+  const inactive = store.scales.filter(s => s.status === 'Inactive').length
 
   // Monthly data (12 months)
   const monthlyData = Array.from({ length: 12 }, (_, i) => {
@@ -420,7 +480,7 @@ export function getDashboardStats(yearFilter?: string, deptFilter?: string, sect
       month: new Date(2000, i, 1).toLocaleDateString('th-TH', { month: 'short' }),
       totalCost: rows.reduce((s, r) => s + r.totalCost, 0),
       self: rows.filter(r => r.repairType === 'self').length,
-      ext:  rows.filter(r => r.repairType === 'ext').length,
+      ext: rows.filter(r => r.repairType === 'ext').length,
       both: rows.filter(r => r.repairType === 'both').length,
     }
   })
@@ -431,7 +491,7 @@ export function getDashboardStats(yearFilter?: string, deptFilter?: string, sect
     const sec = store.sections.find(s => s.code === r.sectionCode)
     const dept = sec?.dept || 'อื่นๆ'
     if (!deptMap[dept]) deptMap[dept] = { cost: 0, count: 0 }
-    deptMap[dept].cost  += r.totalCost
+    deptMap[dept].cost += r.totalCost
     deptMap[dept].count += 1
   })
 
@@ -443,7 +503,7 @@ export function getDashboardStats(yearFilter?: string, deptFilter?: string, sect
   const scaleMap: Record<string, { cost: number; count: number }> = {}
   filtered.forEach(r => {
     if (!scaleMap[r.scaleCode]) scaleMap[r.scaleCode] = { cost: 0, count: 0 }
-    scaleMap[r.scaleCode].cost  += r.totalCost
+    scaleMap[r.scaleCode].cost += r.totalCost
     scaleMap[r.scaleCode].count += 1
   })
   const topScales = Object.entries(scaleMap)
@@ -479,6 +539,7 @@ export interface BackupPayload {
   sections: Section[]; vendors: Vendor[]; scales: Scale[]; repairs: RepairJob[]
   parts: Part[]; weights: Weight[]; users: User[]; calplan: CalPlan[]
   calibrations?: CalibrationRecord[]
+  weightSets?: WeightSet[]
 }
 
 /** ส่งออกข้อมูลทั้งหมดปัจจุบันเป็นก้อน JSON (ใช้กับปุ่ม "Backup") */
@@ -487,7 +548,7 @@ export function exportBackup(): BackupPayload {
     _meta: { version: BACKUP_VERSION, exported_at: new Date().toISOString(), app: BACKUP_APP },
     sections: store.sections, vendors: store.vendors, scales: store.scales, repairs: store.repairs,
     parts: store.parts, weights: store.weights, users: store.users, calplan: store.calplan,
-    calibrations: store.calibrations,
+    calibrations: store.calibrations, weightSets: store.weightSets,
   }
 }
 
@@ -516,10 +577,10 @@ function convertLegacyBackup(raw: any): BackupPayload {
   const seenCodes = new Set<string>((raw.scales ?? []).map((s: any) => s.scale_code))
   const scales: Scale[] = []
   const groups = new Map<string, any[]>()
-  ;(raw.scales ?? []).forEach((s: any) => {
-    const arr = groups.get(s.scale_code) ?? []
-    arr.push(s); groups.set(s.scale_code, arr)
-  })
+    ; (raw.scales ?? []).forEach((s: any) => {
+      const arr = groups.get(s.scale_code) ?? []
+      arr.push(s); groups.set(s.scale_code, arr)
+    })
   groups.forEach((items, code) => {
     const sorted = [...items].sort((a, b) => (a.start_date === '' ? 1 : 0) - (b.start_date === '' ? 1 : 0) || String(a.start_date).localeCompare(b.start_date))
     sorted.forEach((item, idx) => {
@@ -542,6 +603,7 @@ function convertLegacyBackup(raw: any): BackupPayload {
         serialNumber: item.serial_number, brand: item.brand, model: item.model, scaleType: item.type,
         sectionRef: item.section_code, startDate: item.start_date, endDate: item.end_date,
         purchasePrice: item.purchase_price, status: item.status,
+        weightSetId: '', intervalMonths: 12, capacity: 0,
       })
     })
   })
@@ -569,6 +631,7 @@ function convertLegacyBackup(raw: any): BackupPayload {
       serialNumber: '', brand: '', model: '', scaleType: '',
       sectionRef: sectionCodes.has(segs[0]) ? segs[0] : (sections[0]?.code ?? ''),
       startDate: '', endDate: '', purchasePrice: 0, status: 'Inactive',
+      weightSetId: '', intervalMonths: 12, capacity: 0,
     })
   })
   scales.forEach((s, i) => { s.id = i + 1 })
@@ -593,11 +656,12 @@ export function importBackup(json: string) {
   store = {
     sections: payload.sections ?? [],
     vendors: payload.vendors ?? [],
-    scales: payload.scales ?? [],
+    scales: (payload.scales ?? []).map(normalizeScale),
     repairs: payload.repairs ?? [],
     parts: payload.parts ?? [],
     users: payload.users?.length ? payload.users : store.users,
     weights: payload.weights ?? [],
+    weightSets: payload.weightSets?.length ? payload.weightSets : DEFAULT_WEIGHT_SETS,
     calplan: payload.calplan?.length ? payload.calplan : DEFAULT_CALPLAN,
     calibrations: payload.calibrations ?? [],
     _repairSeq: 0,
@@ -607,7 +671,7 @@ export function importBackup(json: string) {
   return {
     sections: store.sections.length, vendors: store.vendors.length, scales: store.scales.length,
     repairs: store.repairs.length, parts: store.parts.length, weights: store.weights.length,
-    users: store.users.length, calplan: store.calplan.length,
+    users: store.users.length, calplan: store.calplan.length, weightSets: store.weightSets.length,
   }
 }
 

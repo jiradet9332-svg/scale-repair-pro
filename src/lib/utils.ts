@@ -57,6 +57,12 @@ export function cpDaysUntil(dateStr: string): number {
 
 // ลูกตุ้มน้ำหนักมาตรฐาน — คำนวณสถานะอัตโนมัติ
 // เกณฑ์: Pass ถ้า Uncertainty(mg.) <= MPE(mg.) / 3, นอกนั้น Not pass
+// ป้ายชื่อชุดตุ้มน้ำหนักมาตรฐาน — คำนวณจาก values เสมอ (ไม่มีทางไม่ตรงกับข้อมูลจริง)
+export function wsLabel(ws: { name: string; values: number[] }): string {
+  const nums = `${ws.values.join(', ')} g`
+  return ws.name ? `${ws.name} — ${nums}` : nums
+}
+
 export function wtStatus(uncertainty: number, mpe: number): 'Pass' | 'Not pass' {
   return Number(uncertainty || 0) <= Number(mpe || 0) / 3 ? 'Pass' : 'Not pass'
 }

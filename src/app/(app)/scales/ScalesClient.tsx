@@ -1,20 +1,22 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { fmtDate, fmt } from '@/lib/utils'
-import { getScales, getSections, createScale, updateScale, deleteScale, buildScaleCode } from '@/lib/store'
-import type { Scale, ScaleStatus } from '@/lib/mockData'
+import { fmtDate, fmt, wsLabel } from '@/lib/utils'
+import { getScales, getSections, createScale, updateScale, deleteScale, buildScaleCode, getWeightSets } from '@/lib/store'
+import type { Scale, ScaleStatus, WeightSet } from '@/lib/mockData'
 
 const PAGE = 15
 const empty = (): Omit<Scale, 'id'> => ({
   code: '', sectionCode: '', brandCode: '', usageCount: 0, seqNumber: 0,
   serialNumber: '', brand: '', model: '', scaleType: '', sectionRef: '',
   startDate: '', endDate: '', purchasePrice: 0, status: 'Active',
+  weightSetId: '', intervalMonths: 12, capacity: 0,
 })
 
 export default function ScalesClient() {
   const [scales, setScales] = useState<Scale[]>([])
   const [sections, setSections] = useState(getSections())
+  const [weightSets, setWeightSets] = useState<WeightSet[]>([])
   const [q, setQ] = useState('')
   const [fStatus, setFStatus] = useState('')
   const [fDept, setFDept] = useState('')
@@ -31,6 +33,7 @@ export default function ScalesClient() {
   useEffect(() => {
     setScales([...getScales()])
     setSections([...getSections()])
+    setWeightSets([...getWeightSets()])
   }, [])
 
   const preview = form.sectionCode && form.brandCode && form.seqNumber
@@ -158,15 +161,19 @@ export default function ScalesClient() {
                 <th className="px-3 py-2.5 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wide w-24">Start Date</th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wide w-24">End Date</th>
                 <th className="px-3 py-2.5 text-right text-[11px] font-medium text-gray-500 uppercase tracking-wide w-28">Machine Price</th>
+                <th className="px-3 py-2.5 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wide w-32">Weight Set</th>
+                <th className="px-3 py-2.5 text-right text-[11px] font-medium text-gray-500 uppercase tracking-wide w-24">Cal. Interval</th>
+                <th className="px-3 py-2.5 text-right text-[11px] font-medium text-gray-500 uppercase tracking-wide w-24">Max Capacity</th>
                 <th className="px-3 py-2.5 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wide w-20">Status</th>
                 <th className="px-3 py-2.5 text-center text-[11px] font-medium text-gray-500 uppercase tracking-wide w-20">Manage</th>
               </tr>
             </thead>
             <tbody>
               {pageData.length === 0 ? (
-                <tr><td colSpan={12} className="py-16 text-center text-gray-400 text-[13px]">ยังไม่มีข้อมูลเครื่องชั่ง — กด &quot;เพิ่มเครื่องชั่ง&quot; เพื่อเริ่มต้น</td></tr>
+                <tr><td colSpan={15} className="py-16 text-center text-gray-400 text-[13px]">ยังไม่มีข้อมูลเครื่องชั่ง — กด &quot;เพิ่มเครื่องชั่ง&quot; เพื่อเริ่มต้น</td></tr>
               ) : pageData.map(s => {
                 const sec = sections.find(x => x.code === s.sectionRef)
+                const ws = weightSets.find(w => w.id === s.weightSetId)
                 return (
                   <tr key={s.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
                     <td className="px-3 py-2.5 font-medium text-blue-600 tracking-wide text-[12px] font-mono">{s.code}</td>
@@ -179,6 +186,9 @@ export default function ScalesClient() {
                     <td className="px-3 py-2.5 text-gray-400 text-[12px]">{fmtDate(s.startDate)}</td>
                     <td className="px-3 py-2.5 text-gray-400 text-[12px]">{s.endDate ? fmtDate(s.endDate) : '—'}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-gray-700">{s.purchasePrice ? '฿' + fmt(s.purchasePrice) : '—'}</td>
+                    <td className="px-3 py-2.5 text-gray-600 text-[12px] truncate" title={ws ? wsLabel(ws) : ''}>{ws ? wsLabel(ws) : '—'}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">{s.intervalMonths ? `${s.intervalMonths} เดือน` : '—'}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">{s.capacity ? `${fmt(s.capacity)} g` : '—'}</td>
                     <td className="px-3 py-2.5">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${s.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${s.status === 'Active' ? 'bg-emerald-500' : 'bg-gray-400'}`} />{s.status}
@@ -256,6 +266,15 @@ export default function ScalesClient() {
                   <select className={inp} value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as ScaleStatus }))}>
                     <option value="Active">Active</option><option value="Inactive">Inactive</option>
                   </select></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2"><label className={lbl}>ชุดตุ้มน้ำหนักที่ใช้สอบเทียบ</label>
+                  <select className={inp} value={form.weightSetId} onChange={e => setForm(f => ({ ...f, weightSetId: e.target.value }))}>
+                    <option value="">— ยังไม่กำหนด —</option>
+                    {weightSets.map(w => <option key={w.id} value={w.id}>{wsLabel(w)}</option>)}
+                  </select></div>
+                <div><label className={lbl}>ความถี่สอบเทียบ (เดือน)</label><input type="number" onFocus={e => e.target.select()} className={inp} placeholder="12" min={1} value={form.intervalMonths || ''} onChange={e => setForm(f => ({ ...f, intervalMonths: Number(e.target.value) }))} /></div>
+                <div><label className={lbl}>พิกัดสูงสุด (g)</label><input type="number" onFocus={e => e.target.select()} className={inp} placeholder="0" min={0} value={form.capacity || ''} onChange={e => setForm(f => ({ ...f, capacity: Number(e.target.value) }))} /></div>
               </div>
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50">

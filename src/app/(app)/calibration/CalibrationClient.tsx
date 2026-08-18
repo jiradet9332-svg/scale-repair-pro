@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { createCalibration } from '@/lib/store'
-import { cpAddMonths, fmtDate } from '@/lib/utils'
-import type { CalUncertaintyComponent } from '@/lib/mockData'
+import { createCalibration, getScales, getSections, getCalibrationsByAsset, getWeightSets } from '@/lib/store'
+import { cpAddMonths, cpDaysUntil, fmtDate, wsLabel } from '@/lib/utils'
+import type { CalUncertaintyComponent, WeightSet } from '@/lib/mockData'
 
 // ─── types ──────────────────────────────────────────────────────────────────
 type UnitState = 'ok' | 'due' | 'over' | 'prog'
-interface Unit { id: string; model: string; loc: string; cap: number; state: UnitState; when: string }
+interface Unit { id: string; model: string; loc: string; cap: number; state: UnitState; when: string; weightSetId: string; intervalMonths: number }
 
 const STATE_LABEL: Record<UnitState, string> = { ok: 'ผ่าน', due: 'ครบกำหนด', over: 'เกินกำหนด', prog: 'กำลังทำ' }
 const STATE_DOT: Record<UnitState, string> = { ok: 'bg-emerald-500', due: 'bg-amber-500', over: 'bg-red-500', prog: 'bg-blue-500' }
@@ -19,53 +19,26 @@ const STATE_BADGE: Record<UnitState, string> = {
   prog: 'bg-blue-50 text-blue-700 border-blue-200',
 }
 
-const MODELS = ['Sartorius BCE', 'Mettler ME', 'Ohaus PX', 'Shimadzu UW', 'AND GX', 'Radwag PS']
-const LOCS = ['QC Lab 1', 'QC Lab 2', 'Production A', 'Production B', 'R&D', 'Warehouse', 'Microbiology', 'Packaging']
 const CAPS = [220, 420, 620, 1500, 3200, 6200]
-const STATES: UnitState[] = ['ok', 'due', 'over', 'prog']
-const STATE_WEIGHT = [0.62, 0.22, 0.09, 0.07]
-
-function pick<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)] }
-function pickState(): UnitState {
-  let r = Math.random(), c = 0
-  for (let i = 0; i < STATES.length; i++) { c += STATE_WEIGHT[i]; if (r < c) return STATES[i] }
-  return 'ok'
-}
-function generateRegistry(n = 500): Unit[] {
-  const arr: Unit[] = []
-  for (let i = 1; i <= n; i++) {
-    const st = pickState()
-    arr.push({
-      id: 'A' + String(i).padStart(4, '0'),
-      model: pick(MODELS),
-      loc: pick(LOCS),
-      cap: pick(CAPS),
-      state: st,
-      when: st === 'over' ? 'เกิน 14 วัน' : st === 'due' ? 'ภายใน 7 วัน' : st === 'prog' ? 'กำลังทำ' : 'มี.ค. 2027',
-    })
-  }
-  return arr
-}
 
 // ─── worked-example calibration data (demo values) ─────────────────────────
 const D = 0.5 // resolution (g)
 const MPE = 1.0 // g
-const WEIGHTS = [
-  { nom: 10, cm: 0.0120, Uw: 0.0350 },
-  { nom: 50, cm: -0.622, Uw: 0.0490 },
-  { nom: 100, cm: -1.0400, Uw: 0.1100 },
-  { nom: 500, cm: -1.2500, Uw: 0.4000 },
-  { nom: 1000, cm: -8.500, Uw: 1.7000 },
-]
+
+// ── ชุดลูกตุ้มน้ำหนักมาตรฐาน — เลือกได้ตามแผนก/เครื่องชั่งที่ต่างกัน ─────────
+// (รายการชุดจริงมาจากทะเบียนชุดตุ้มน้ำหนัก /weightsets — ดู getWeightSets() ด้านล่าง)
+interface WeightSpec { nom: number; cm: number; Uw: number }
 const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length
 const sd = (a: number[]) => { const m = mean(a), n = a.length; if (n < 2) return 0; return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (n - 1)) }
 const uRes = Math.sqrt(2 * Math.pow(D / 2 / Math.sqrt(3), 2))
 const f = (x: number, n = 4) => Number(x).toFixed(n)
+const f1 = (x: number) => Number(x).toFixed(1) // แสดงค่าน้ำหนักมาตรฐานทศนิยม 1 ตำแหน่ง เช่น 10.0
 
 // ─── per-unit calibration working data ─────────────────────────────────────
 interface UnitCalData {
   rep: Record<number, number[]>
   ecc: Record<number, number[]>
+  weightSetId: string
   temp: number
   rh: number
   calDate: string
@@ -85,34 +58,64 @@ function makeRng(seed: number) {
   return () => { s = (Math.imul(s, 1103515245) + 12345) & 0x7fffffff; return s / 0x7fffffff }
 }
 
-function genUnitCal(id: string): UnitCalData {
-  const rng = makeRng(hashSeed(id))
-  const jitter = (base: number, steps: number[]) => steps[Math.floor(rng() * steps.length)] + base
-  const repFor = (nom: number) => Array.from({ length: 6 }, () => jitter(nom, [-1, -0.5, 0, 0, 0, 0.5]) )
-  const rep: Record<number, number[]> = {}
-  WEIGHTS.forEach(w => { rep[w.nom] = repFor(w.nom) })
-  const eccRef = rep[500][0]
-  const ecc: Record<number, number[]> = {
-    500: [eccRef, jitter(eccRef, [-0.5, 0, 0, 0.5]), jitter(eccRef, [-0.5, 0, 0, 0.5]), jitter(eccRef, [-0.5, 0, 0, 0.5]), jitter(eccRef, [-0.5, 0, 0, 0.5])],
-  }
-  return {
-    rep, ecc,
-    temp: Number((21.5 + rng() * 3.5).toFixed(1)),
-    rh: Math.round(40 + rng() * 25),
-    calDate: new Date().toISOString().slice(0, 10),
-    technician: '',
-    intervalMonths: 12,
-  }
+// สร้างคุณสมบัติ (เดโม) ของลูกตุ้มแต่ละจุดในชุดที่เลือก
+// cm = ค่าแก้ไขมวลจริงจากค่าระบุ, Uw = ค่าความไม่แน่นอนของลูกตุ้ม (k=2)
+function buildWeightSpecs(values: number[]): WeightSpec[] {
+  return values.map(nom => {
+    const rng = makeRng(hashSeed('wset-' + nom))
+    const cmRatio = -0.003 - rng() * 0.006
+    const uwRatio = 0.0006 + rng() * 0.0012
+    return { nom, cm: Number((nom * cmRatio).toFixed(4)), Uw: Number((nom * uwRatio).toFixed(4)) }
+  })
+}
+
+// เลือกจุดอ้างอิงสำหรับ Eccentricity — ใช้ค่าที่ใกล้ 1/3 ของตุ้มก้อนใหญ่สุดในชุด
+function pickEccNom(specs: WeightSpec[]): number {
+  if (specs.length === 0) return 0
+  const maxNom = Math.max(...specs.map(s => s.nom))
+  const target = maxNom / 3
+  return specs.reduce((best, cur) => (Math.abs(cur.nom - target) < Math.abs(best.nom - target) ? cur : best)).nom
+}
+
+// สร้างรายชื่อเครื่องชั่งสำหรับหน้าบันทึกสอบเทียบ จากทะเบียนเครื่องชั่งจริง (Scale Register)
+// รวมประวัติสอบเทียบจริงของแต่ละเครื่อง (ถ้ามี) เพื่อคำนวณสถานะครบกำหนด/เกินกำหนด/กำลังทำ
+function buildCalRegistry(): Unit[] {
+  const sectionName = new Map(getSections().map(s => [s.code, s.name]))
+  return getScales()
+    .filter(s => s.status === 'Active')
+    .map(s => {
+      const model = [s.brand, s.model].filter(Boolean).join(' ').trim() || (s.scaleType || 'เครื่องชั่ง')
+      const loc = sectionName.get(s.sectionRef) ?? s.sectionRef ?? '—'
+      // พิกัดสูงสุด: ใช้ค่าที่ผู้ใช้กรอกไว้ในทะเบียนเครื่องชั่งถ้ามี ไม่งั้นเดา (เดโม) ไปก่อน
+      const cap = s.capacity || CAPS[hashSeed(s.code) % CAPS.length]
+      const history = getCalibrationsByAsset(s.code) // เรียงล่าสุดก่อนแล้ว
+      const draft = history.find(h => h.status === 'draft')
+      const issued = history.find(h => h.status === 'issued')
+      let state: UnitState, when: string
+      if (draft) {
+        state = 'prog'; when = 'กำลังทำ (มีร่างค้างอยู่)'
+      } else if (!issued) {
+        state = 'due'; when = 'ยังไม่เคยสอบเทียบ'
+      } else {
+        const days = cpDaysUntil(issued.nextDue)
+        if (days < 0) { state = 'over'; when = `เกิน ${Math.abs(days)} วัน` }
+        else if (days <= 30) { state = 'due'; when = `ภายใน ${days} วัน` }
+        else { state = 'ok'; when = fmtDate(issued.nextDue) }
+      }
+      return { id: s.code, model, loc, cap, state, when, weightSetId: s.weightSetId || '', intervalMonths: s.intervalMonths || 12 }
+    })
 }
 
 // ค่าเปล่าเริ่มต้นสำหรับเริ่มบันทึกรอบใหม่ — ทุกช่อง "ตรงเป๊ะ" กับค่าที่ควรจะเป็น
 // (= ยังไม่ได้กรอกอะไร) ช่างจะพิมพ์เฉพาะจุดที่อ่านค่าได้ไม่ตรง/มีความคลาดเคลื่อนเท่านั้น
-function blankUnitCal(): UnitCalData {
+function blankUnitCal(weightSetId: string, values: number[]): UnitCalData {
+  const specs = buildWeightSpecs(values)
   const rep: Record<number, number[]> = {}
-  WEIGHTS.forEach(w => { rep[w.nom] = Array(6).fill(w.nom) })
-  const ecc: Record<number, number[]> = { 500: Array(5).fill(500) }
+  specs.forEach(w => { rep[w.nom] = Array(5).fill(w.nom) })
+  const eccNom = pickEccNom(specs)
+  const ecc: Record<number, number[]> = { [eccNom]: Array(5).fill(eccNom) }
   return {
-    rep, ecc,
+    rep, ecc, weightSetId,
     temp: 20,
     rh: 50,
     calDate: new Date().toISOString().slice(0, 10),
@@ -123,12 +126,13 @@ function blankUnitCal(): UnitCalData {
 
 export default function CalibrationClient() {
   // ── equipment register ──────────────────────────────────────────────────
-  const [registry, setRegistry] = useState<Unit[]>([])
-  useEffect(() => { setRegistry(generateRegistry()) }, [])
+  const [registry, setRegistry] = useState<Unit[]>(() => buildCalRegistry())
 
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | UnitState>('all')
-  const [selId, setSelId] = useState('A0142')
+  const [selId, setSelId] = useState('')
+  // เลือกเครื่องแรกในทะเบียนโดยอัตโนมัติเมื่อโหลดข้อมูลเสร็จ (ถ้ายังไม่มีการเลือกเครื่องใด)
+  useEffect(() => { if (!selId && registry.length) setSelId(registry[0].id) }, [registry, selId])
 
   const filtered = useMemo(() => registry.filter(u => {
     if (filter !== 'all' && u.state !== filter) return false
@@ -138,33 +142,62 @@ export default function CalibrationClient() {
   }), [registry, filter, search])
 
   const shown = filtered.slice(0, 120)
-  const selUnit = useMemo(() => registry.find(u => u.id === selId) ?? { id: selId, model: 'Mettler ME', loc: 'QC Lab 1', cap: 1500, state: 'prog' as UnitState, when: 'กำลังทำ' }, [registry, selId])
+  const selUnit = useMemo(() => registry.find(u => u.id === selId) ?? { id: selId, model: '—', loc: '—', cap: 1500, state: 'due' as UnitState, when: '—', weightSetId: '', intervalMonths: 12 }, [registry, selId])
 
   const totalPlan = registry.length
   const doneCount = registry.filter(u => u.state === 'ok').length
   const dueCount = registry.filter(u => u.state === 'due').length
   const overCount = registry.filter(u => u.state === 'over').length
 
-  // ── ข้อมูลการสอบเทียบแยกตามเครื่อง (แต่ละเครื่องไม่ใช้ค่าร่วมกัน) ─────────
-  const [unitData, setUnitData] = useState<Record<string, UnitCalData>>({})
-  useEffect(() => {
-    setUnitData(prev => (prev[selId] ? prev : { ...prev, [selId]: genUnitCal(selId) }))
-  }, [selId])
-  const current = unitData[selId] ?? genUnitCal(selId)
+  // ── ชุดตุ้มน้ำหนักมาตรฐาน (จากทะเบียนชุดตุ้มน้ำหนัก /weightsets) ─────────
+  const [weightSets, setWeightSets] = useState<WeightSet[]>(() => getWeightSets())
+  const defaultSetId = weightSets[0]?.id ?? ''
 
-  function patchCurrent(patch: Partial<UnitCalData>) {
-    setUnitData(prev => ({ ...prev, [selId]: { ...(prev[selId] ?? genUnitCal(selId)), ...patch } }))
+  // ── ข้อมูลการสอบเทียบแยกตามเครื่อง (แต่ละเครื่องไม่ใช้ค่าร่วมกัน) ─────────
+  // เครื่องที่ยังไม่เคยกรอก จะเริ่มจากค่าเปล่าเสมอ (ไม่มีตัวเลขค้าง/สุ่มขึ้นมาล่วงหน้า)
+  // ค่าตั้งต้น (ชุดตุ้ม/ความถี่สอบเทียบ) จะดึงจากที่กำหนดไว้ในทะเบียนเครื่องชั่งของเครื่องนั้นๆ ถ้ามี
+  function defaultUnitCal(unitId: string): UnitCalData {
+    const u = registry.find(r => r.id === unitId)
+    const validAssigned = u?.weightSetId && weightSets.some(w => w.id === u.weightSetId) ? u.weightSetId : ''
+    const setId = validAssigned || defaultSetId
+    const values = weightSets.find(w => w.id === setId)?.values ?? []
+    const blank = blankUnitCal(setId, values)
+    return { ...blank, intervalMonths: u?.intervalMonths || 12 }
   }
 
-  const { rep, ecc, temp, rh, calDate, technician, intervalMonths } = current
+  const [unitData, setUnitData] = useState<Record<string, UnitCalData>>({})
+  useEffect(() => {
+    setUnitData(prev => (prev[selId] ? prev : { ...prev, [selId]: defaultUnitCal(selId) }))
+  }, [selId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const current = unitData[selId] ?? defaultUnitCal(selId)
+
+  function patchCurrent(patch: Partial<UnitCalData>) {
+    setUnitData(prev => ({ ...prev, [selId]: { ...(prev[selId] ?? defaultUnitCal(selId)), ...patch } }))
+  }
+
+  const { rep, ecc, weightSetId, temp, rh, calDate, technician, intervalMonths } = current
+  const currentSet = useMemo(() => weightSets.find(w => w.id === weightSetId) ?? weightSets[0], [weightSets, weightSetId])
+  const specs = useMemo(() => buildWeightSpecs(currentSet?.values ?? []), [currentSet])
+  const maxNom = useMemo(() => Math.max(...specs.map(s => s.nom)), [specs])
+  const eccNom = useMemo(() => pickEccNom(specs), [specs])
   const setTemp = (v: number) => patchCurrent({ temp: v })
   const setRh = (v: number) => patchCurrent({ rh: v })
   const setCalDate = (v: string) => patchCurrent({ calDate: v })
   const setTechnician = (v: string) => patchCurrent({ technician: v })
   const setIntervalMonths = (v: number) => patchCurrent({ intervalMonths: v })
+  // สลับชุดตุ้มน้ำหนัก — รีเซ็ตค่าที่กรอกไว้ให้ตรงกับจุดทดสอบชุดใหม่ (คงค่าอื่น เช่น ช่าง/อุณหภูมิ ไว้เหมือนเดิม)
+  function setWeightSet(id: string) {
+    const ws = weightSets.find(w => w.id === id)
+    if (!ws) return
+    const blank = blankUnitCal(id, ws.values)
+    patchCurrent({ weightSetId: id, rep: blank.rep, ecc: blank.ecc })
+  }
 
   const [saveMsg, setSaveMsg] = useState('')
   const [saveError, setSaveError] = useState('')
+  // เก็บข้อความดิบของช่องที่กำลังพิมพ์อยู่ ไว้แสดงระหว่างพิมพ์ (เช่น "199.")
+  // เพื่อไม่ให้ค่าที่แปลงเป็นตัวเลขแล้ว (ตัดจุดทศนิยมท้ายออก) ไปรบกวนการพิมพ์
+  const [editingCell, setEditingCell] = useState<{ kind: 'rep' | 'ecc'; nom: number; idx: number; text: string } | null>(null)
   const nextDue = useMemo(() => cpAddMonths(calDate, intervalMonths), [calDate, intervalMonths])
 
   // เคลียร์ข้อความแจ้งเตือนเมื่อสลับเครื่องชั่ง
@@ -179,43 +212,43 @@ export default function CalibrationClient() {
     patchCurrent({ rep: next })
   }
   function updateEcc(idx: number, val: string) {
-    const next = { ...ecc, 500: [...ecc[500]] }
+    const next = { ...ecc, [eccNom]: [...(ecc[eccNom] ?? Array(5).fill(eccNom))] }
     const n = parseFloat(val)
-    next[500][idx] = val.trim() === '' || Number.isNaN(n) ? 500 : n
+    next[eccNom][idx] = val.trim() === '' || Number.isNaN(n) ? eccNom : n
     patchCurrent({ ecc: next })
   }
 
   // ── derived calculations ─────────────────────────────────────────────────
-  const repRows = useMemo(() => WEIGHTS.map(w => {
-    const r = rep[w.nom]; const m = mean(r), s = sd(r), uA = s / Math.sqrt(r.length)
+  const repRows = useMemo(() => specs.map(w => {
+    const r = rep[w.nom] ?? Array(5).fill(w.nom); const m = mean(r), s = sd(r), uA = s / Math.sqrt(r.length)
     return { ...w, r, m, s, uA }
-  }), [rep])
+  }), [rep, specs])
   const uA_max = Math.max(...repRows.map(r => r.uA))
-  const uA_atMax = repRows.find(r => r.nom === 1000)?.uA ?? 0
+  const uA_atMax = repRows.find(r => r.nom === maxNom)?.uA ?? 0
 
   const eccRow = useMemo(() => {
-    const r = ecc[500]; const ref = r[0]
+    const r = ecc[eccNom] ?? Array(5).fill(eccNom); const ref = r[0]
     const devs = r.map(v => Math.abs(v - ref)); const maxd = Math.max(...devs)
     const u = maxd / Math.sqrt(3)
-    return { r, ref, devs, maxd, u }
-  }, [ecc])
+    return { r, ref, devs, maxd, u, nom: eccNom }
+  }, [ecc, eccNom])
 
-  const linRows = useMemo(() => WEIGHTS.map(w => {
+  const linRows = useMemo(() => specs.map(w => {
     const realMass = w.nom + w.cm / 1000
-    const reading = mean(rep[w.nom])
+    const reading = mean(rep[w.nom] ?? Array(5).fill(w.nom))
     const E = reading - realMass
     const uW = (w.Uw / 2) / 1000
     return { ...w, realMass, reading, E, uW }
-  }), [rep])
+  }), [rep, specs])
   const Eabs_max = Math.max(...linRows.map(r => Math.abs(r.E)))
-  const uW_atMax = linRows.find(r => r.nom === 1000)?.uW ?? 0
+  const uW_atMax = linRows.find(r => r.nom === maxNom)?.uW ?? 0
 
   const budget = useMemo(() => [
-    { name: 'Repeatability (จุดพิกัดสูงสุด)', type: 'A', dist: 'normal', val: uA_atMax * Math.sqrt(6), div: '√6', u: uA_atMax },
+    { name: 'Repeatability (จุดพิกัดสูงสุด)', type: 'A', dist: 'normal', val: uA_atMax * Math.sqrt(5), div: '√5', u: uA_atMax },
     { name: 'Eccentricity', type: 'B', dist: 'rectangular', val: eccRow.u * Math.sqrt(3), div: '√3', u: eccRow.u },
     { name: 'Resolution (ศูนย์ + โหลด)', type: 'B', dist: 'rectangular', val: D, div: '√2·2√3', u: uRes },
-    { name: 'มวลตุ้มมาตรฐาน (1000 g)', type: 'B', dist: 'normal', val: uW_atMax * 2, div: 'k=2', u: uW_atMax },
-  ], [uA_atMax, eccRow.u, uW_atMax])
+    { name: `มวลตุ้มมาตรฐาน (${maxNom} g)`, type: 'B', dist: 'normal', val: uW_atMax * 2, div: 'k=2', u: uW_atMax },
+  ], [uA_atMax, eccRow.u, uW_atMax, maxNom])
 
   const sumSq = budget.reduce((s, c) => s + c.u * c.u, 0)
   const uc = Math.sqrt(sumSq)
@@ -234,14 +267,16 @@ export default function CalibrationClient() {
       uc, k: 2, uExpanded: Uexp, errorMax: Eabs_max, worst, pass,
       components: budget as CalUncertaintyComponent[],
       repeatability: repRows.map(r => ({ nom: r.nom, readings: [...r.r], mean: r.m, sd: r.s, uA: r.uA })),
-      eccentricity: { nom: 500, readings: [...eccRow.r], ref: eccRow.ref, maxDev: eccRow.maxd, u: eccRow.u },
+      eccentricity: { nom: eccNom, readings: [...eccRow.r], ref: eccRow.ref, maxDev: eccRow.maxd, u: eccRow.u },
       linearity: linRows.map(r => ({ nom: r.nom, realMass: r.realMass, reading: r.reading, error: r.E, uWeight: r.uW })),
       technician, intervalMonths, nextDue,
       status,
     })
     setSaveMsg(`บันทึก ${status === 'issued' ? 'ใบรับรอง' : 'ร่าง'} "${rec.certNo}" เรียบร้อย — กำหนดครั้งถัดไป ${fmtDate(rec.nextDue)}`)
-    // ล้างหน้าบันทึกกลับเป็นค่าเปล่า พร้อมสำหรับสอบเทียบรอบถัดไป (เครื่องเดิมหรือเครื่องอื่น)
-    setUnitData(prev => ({ ...prev, [selId]: blankUnitCal() }))
+    // ล้างหน้าบันทึกกลับเป็นค่าเปล่า พร้อมสำหรับสอบเทียบรอบถัดไป (เครื่องเดิมหรือเครื่องอื่น) — คงชุดตุ้มน้ำหนักเดิมไว้
+    setUnitData(prev => ({ ...prev, [selId]: blankUnitCal(weightSetId, currentSet?.values ?? []) }))
+    // รีเฟรชสถานะในทะเบียนซ้าย ให้ badge ครบกำหนด/เกินกำหนด/กำลังทำ อัปเดตตามข้อมูลที่เพิ่งบันทึก
+    setRegistry(buildCalRegistry())
   }
 
   // ── style tokens (matches rest of app) ──────────────────────────────────
@@ -329,7 +364,8 @@ export default function CalibrationClient() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-[10.5px] font-mono text-gray-400 uppercase tracking-wide">REGISTER / {selUnit.id}</div>
-              <h2 className="text-[15px] font-semibold text-gray-900">เครื่องชั่งดิจิทัล {selUnit.id}</h2>
+              <h2 className="text-[15px] font-semibold text-gray-900">{selUnit.model || 'เครื่องชั่ง'} · {selUnit.id}</h2>
+              <div className="text-[10.5px] text-gray-400 mt-0.5">{selUnit.loc}</div>
             </div>
             <span className={`px-2.5 py-1 rounded-full text-[10.5px] font-medium border ${STATE_BADGE[selUnit.state]}`}>{STATE_LABEL[selUnit.state]}</span>
           </div>
@@ -392,6 +428,21 @@ export default function CalibrationClient() {
             </div>
           </div>
 
+          {/* select weight set */}
+          <div className={`${card} p-4 flex items-center gap-3 flex-wrap`}>
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+              <i className="ti ti-stack-2 text-[13px]" /> ชุดตุ้มน้ำหนักมาตรฐาน
+            </div>
+            <select value={weightSetId} onChange={e => setWeightSet(e.target.value)}
+              className="text-[12.5px] font-mono px-3 py-1.5 border border-gray-200 rounded-lg outline-none focus:border-blue-400 bg-white min-w-[260px]">
+              {weightSets.map(s => <option key={s.id} value={s.id}>{wsLabel(s)}</option>)}
+            </select>
+            <span className="text-[10.5px] text-gray-400">เลือกชุดตุ้มตามที่แผนกใช้จริง — สลับชุดจะรีเซ็ตค่าที่กรอกไว้ของเครื่องนี้</span>
+            <Link href="/weightsets" className="ml-auto flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-700 font-medium">
+              <i className="ti ti-settings text-[13px]" /> จัดการชุดตุ้มน้ำหนัก
+            </Link>
+          </div>
+
           {/* 01 repeatability */}
           <div className={card}>
             <div className="flex items-center gap-2.5 px-4 py-3 border-b border-gray-100 flex-wrap">
@@ -404,21 +455,28 @@ export default function CalibrationClient() {
               <table className="w-full text-[12px] font-mono">
                 <thead><tr className="border-b border-gray-100">
                   <th className={thL}>น้ำหนักทดสอบ</th>
-                  {[1,2,3,4,5,6].map(n => <th key={n} className={th}>#{n}</th>)}
+                  {[1, 2, 3, 4, 5].map(n => <th key={n} className={th}>#{n}</th>)}
                   <th className={th}>ค่าเฉลี่ย</th><th className={th}>s</th><th className={th}>u<sub>A</sub>=s/√n</th>
                 </tr></thead>
                 <tbody>
                   {repRows.map(row => (
                     <tr key={row.nom} className="border-b border-gray-50 last:border-0">
-                      <td className={tdL}>{row.nom} g</td>
+                      <td className={tdL}>{f1(row.nom)} g</td>
                       {row.r.map((v, i) => (
                         <td key={i} className="px-1 py-1.5 text-right">
-                          <input value={v === row.nom ? '' : v} placeholder={String(row.nom)} onFocus={e => e.target.select()} onChange={e => updateRep(row.nom, i, e.target.value)} className={cellInput} />
+                          <input
+                            value={editingCell && editingCell.kind === 'rep' && editingCell.nom === row.nom && editingCell.idx === i ? editingCell.text : (v === row.nom ? '' : v)}
+                            placeholder={f1(row.nom)}
+                            onFocus={e => { e.target.select(); setEditingCell({ kind: 'rep', nom: row.nom, idx: i, text: v === row.nom ? '' : String(v) }) }}
+                            onBlur={() => setEditingCell(null)}
+                            onChange={e => { setEditingCell({ kind: 'rep', nom: row.nom, idx: i, text: e.target.value }); updateRep(row.nom, i, e.target.value) }}
+                            className={cellInput}
+                          />
                         </td>
                       ))}
-                      <td className={`${td} text-gray-400`}>{f(row.m, 3)}</td>
-                      <td className={`${td} text-gray-400`}>{f(row.s, 4)}</td>
-                      <td className={`${td} text-blue-600 font-medium`}>{f(row.uA, 4)}</td>
+                      <td className={`${td} text-gray-400`}>{f(row.m, 1)}</td>
+                      <td className={`${td} text-gray-400`}>{f(row.s, 1)}</td>
+                      <td className={`${td} text-blue-600 font-medium`}>{f(row.uA, 1)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -444,7 +502,7 @@ export default function CalibrationClient() {
                   <div className="absolute w-7 h-7 rounded-lg border border-gray-200 text-gray-500 bg-white grid place-items-center text-[11px] font-mono" style={{ bottom: 10, right: 10 }}>5</div>
                 </div>
                 <p className="text-[11.5px] text-gray-500 max-w-[340px] leading-relaxed">
-                  ใช้ตุ้ม ≈ <b className="text-gray-800">1/3 ของพิกัด</b> (≈500 g) วางตำแหน่งกึ่งกลาง (1) ก่อนเป็นค่าอ้างอิง แล้ววางมุมทั้งสี่ (2–5)
+                  ใช้ตุ้ม ≈ <b className="text-gray-800">1/3 ของพิกัด</b> (≈{eccRow.nom} g) วางตำแหน่งกึ่งกลาง (1) ก่อนเป็นค่าอ้างอิง แล้ววางมุมทั้งสี่ (2–5)
                   ค่าที่ใช้คือ <b className="text-gray-800">ค่าเบี่ยงเบนสูงสุด</b> จากตำแหน่งกึ่งกลาง หารด้วย √3
                 </p>
               </div>
@@ -456,9 +514,9 @@ export default function CalibrationClient() {
                   </tr></thead>
                   <tbody>
                     <tr>
-                      <td className={tdL}>500 g</td>
+                      <td className={tdL}>{eccRow.nom} g</td>
                       {eccRow.r.map((v, i) => (
-                        <td key={i} className="px-1 py-1.5 text-right"><input value={v === 500 ? '' : v} placeholder="500" onFocus={e => e.target.select()} onChange={e => updateEcc(i, e.target.value)} className={cellInput} /></td>
+                        <td key={i} className="px-1 py-1.5 text-right"><input value={v === eccRow.nom ? '' : v} placeholder={String(eccRow.nom)} onFocus={e => e.target.select()} onChange={e => updateEcc(i, e.target.value)} className={cellInput} /></td>
                       ))}
                       <td className={`${td} text-gray-400`}>{f(eccRow.maxd, 3)}</td>
                       <td className={`${td} text-blue-600 font-medium`}>{f(eccRow.u, 4)}</td>

@@ -14,11 +14,12 @@ type WeightFormState = Omit<Weight, 'weightG' | 'mpe' | 'convMass' | 'uncertaint
 }
 
 const empty = (): WeightFormState => ({
-  sn: '', sectionCode: '', weightG: '', class_: 'F1', supplier: '',
+  sn: '', sectionCode: '', weightG: '', class_: '', supplier: '',
   mpe: '', calDate: '', calBy: '', certNo: '', convMass: '', uncertainty: '', status: 'Pass',
 })
 
 const toNum = (s: string) => { const n = parseFloat(s); return Number.isFinite(n) ? n : 0 }
+const round = (n: number, dp: number) => { const f = 10 ** dp; return Math.round((n + Number.EPSILON) * f) / f }
 
 export default function WeightsPage() {
   const [weights, setWeights] = useState<Weight[]>([])
@@ -43,14 +44,15 @@ export default function WeightsPage() {
 
   function openAdd() { setForm(empty()); setEditSn(''); setModal('add') }
   function openEdit(w: Weight) {
-    setForm({ ...w, weightG: String(w.weightG || ''), mpe: String(w.mpe || ''), convMass: String(w.convMass || ''), uncertainty: String(w.uncertainty || '') })
+    const numToStr = (n: number, dp: number) => (n || n === 0) ? String(round(n, dp)) : ''
+    setForm({ ...w, weightG: String(w.weightG ?? ''), mpe: numToStr(w.mpe, 1), convMass: numToStr(w.convMass, 3), uncertainty: numToStr(w.uncertainty, 3) })
     setEditSn(w.sn); setModal('edit')
   }
 
   function save() {
     const sn = form.sn.trim()
     if (!sn) { alert('กรุณากรอกหมายเลข S/N'); return }
-    const weightG = toNum(form.weightG), mpe = toNum(form.mpe), convMass = toNum(form.convMass), uncertainty = toNum(form.uncertainty)
+    const weightG = toNum(form.weightG), mpe = round(toNum(form.mpe), 1), convMass = round(toNum(form.convMass), 3), uncertainty = round(toNum(form.uncertainty), 3)
     const status = wtStatus(uncertainty, mpe)
     const payload: Weight = { ...form, sn, weightG, mpe, convMass, uncertainty, status }
     if (modal === 'add') {
@@ -76,20 +78,20 @@ export default function WeightsPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-[15px] font-semibold text-gray-900">ทะเบียนลูกตุ้มน้ำหนักมาตรฐาน</h1>
-          <p className="text-[11px] text-gray-400 mt-0.5">{filtered.length} รายการ</p>
+          <h1 className="text-[15px] font-semibold text-gray-900">Weight Register</h1>
+          <p className="text-[11px] text-gray-400 mt-0.5">{filtered.length} Records</p>
         </div>
         <button onClick={openAdd} className="flex items-center gap-1.5 h-8 px-3.5 bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-medium rounded-lg transition-colors">
-          <i className="ti ti-plus text-[15px]" /> เพิ่มลูกตุ้ม
+          <i className="ti ti-plus text-[15px]" /> Add Weight
         </button>
       </div>
 
       <div className="flex gap-2 mb-4">
-        <input type="text" placeholder="ค้นหา S/N, ผู้จำหน่าย, เลขเซอร์..." value={q} onChange={e => { setQ(e.target.value); setPage(1) }}
+        <input type="text" placeholder="Search" value={q} onChange={e => { setQ(e.target.value); setPage(1) }}
           className="flex-1 text-[12px] px-3 py-2 border border-gray-200 rounded-lg bg-white outline-none focus:border-blue-400" />
         <select value={fStatus} onChange={e => { setFStatus(e.target.value); setPage(1) }}
           className="text-[12px] px-3 py-2 border border-gray-200 rounded-lg bg-white outline-none">
-          <option value="">ทุกสถานะ</option>
+          <option value="">All Status</option>
           <option value="Pass">Pass</option>
           <option value="Not pass">Not pass</option>
         </select>
@@ -112,28 +114,27 @@ export default function WeightsPage() {
                 <th style={{ width: 130 }} className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase truncate">Conventional Mass (mg.)</th>
                 <th style={{ width: 110 }} className="px-3 py-3 text-right text-[10px] font-medium text-gray-400 uppercase truncate">Uncertainty (mg.)</th>
                 <th style={{ width: 90 }} className="px-3 py-3 text-left text-[10px] font-medium text-gray-400 uppercase truncate">Status</th>
-                <th style={{ width: 80 }} className="px-3 py-3 text-center text-[10px] font-medium text-gray-400 uppercase truncate">จัดการ</th>
+                <th style={{ width: 80 }} className="px-3 py-3 text-center text-[10px] font-medium text-gray-400 uppercase truncate">Actions</th>
               </tr>
             </thead>
             <tbody>
               {pageData.length === 0 ? (
                 <tr><td colSpan={13} className="py-14 text-center text-gray-400 text-[12px]">ยังไม่มีข้อมูลลูกตุ้ม — กด &quot;+ เพิ่มลูกตุ้ม&quot; เพื่อเริ่มต้น</td></tr>
               ) : pageData.map(w => {
-                const sec = sections.find(s => s.code === w.sectionCode)
                 const st = wtStatus(w.uncertainty, w.mpe)
                 return (
                   <tr key={w.sn} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="px-3 py-3 text-gray-600 truncate">{sec?.name ?? w.sectionCode ?? '—'}</td>
+                    <td className="px-3 py-3 text-gray-600 truncate">{w.sectionCode || '—'}</td>
                     <td className="px-3 py-3 text-right tabular-nums truncate">{w.weightG}</td>
                     <td className="px-3 py-3 font-mono text-blue-600 font-semibold truncate">{w.sn}</td>
                     <td className="px-3 py-3 truncate"><span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 text-[11px]">{w.class_}</span></td>
                     <td className="px-3 py-3 text-gray-600 truncate">{w.supplier || '—'}</td>
-                    <td className="px-3 py-3 text-right tabular-nums truncate">{w.mpe}</td>
+                    <td className="px-3 py-3 text-right tabular-nums truncate">{w.mpe.toFixed(1)}</td>
                     <td className="px-3 py-3 text-gray-500 truncate">{fmtDate(w.calDate)}</td>
                     <td className="px-3 py-3 text-gray-600 truncate">{w.calBy || '—'}</td>
                     <td className="px-3 py-3 text-gray-500 truncate">{w.certNo || '—'}</td>
-                    <td className="px-3 py-3 text-right tabular-nums truncate">{w.convMass}</td>
-                    <td className="px-3 py-3 text-right tabular-nums truncate">{w.uncertainty}</td>
+                    <td className="px-3 py-3 text-right tabular-nums truncate">{w.convMass.toFixed(3)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums truncate">{w.uncertainty.toFixed(3)}</td>
                     <td className="px-3 py-3 truncate">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${st === 'Pass' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>{st}</span>
                     </td>
@@ -151,7 +152,7 @@ export default function WeightsPage() {
         </div>
 
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100 bg-gray-50">
-          <span className="text-[12px] text-gray-400">หน้า {page} / {totalPages} ({filtered.length} รายการ)</span>
+          <span className="text-[12px] text-gray-400">Page {page} / {totalPages} ({filtered.length} Records)</span>
           <div className="flex gap-1">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="w-7 h-7 flex items-center justify-center border border-gray-200 rounded text-gray-500 disabled:opacity-30 text-[12px]">‹</button>
             {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
@@ -166,29 +167,29 @@ export default function WeightsPage() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl border border-gray-200 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h2 className="text-[14px] font-medium">{modal === 'add' ? 'เพิ่มลูกตุ้มใหม่' : 'แก้ไขลูกตุ้ม'}</h2>
+              <h2 className="text-[14px] font-medium">{modal === 'add' ? 'Add New Weight' : 'แก้ไขลูกตุ้ม'}</h2>
               <button onClick={() => setModal(null)} className="w-7 h-7 flex items-center justify-center rounded hover:bg-gray-100 text-gray-400"><i className="ti ti-x text-[15px]" /></button>
             </div>
             <div className="p-5 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div><label className={lbl}>Section</label>
                   <select className={inp} value={form.sectionCode} onChange={e => setForm(f => ({ ...f, sectionCode: e.target.value }))}>
-                    <option value="">— เลือกจากทะเบียน —</option>
+                    <option value="">— Select —</option>
                     {sections.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
                   </select></div>
                 <div><label className={lbl}>Weight (g)</label><input type="text" inputMode="decimal" onFocus={e => e.target.select()} className={inp} value={form.weightG} onChange={e => { const v = e.target.value; if (/^-?\d*\.?\d*$/.test(v)) setForm(f => ({ ...f, weightG: v })) }} /></div>
                 <div><label className={lbl}>Weight S/N *</label><input className={inp} value={form.sn} onChange={e => setForm(f => ({ ...f, sn: e.target.value }))} disabled={modal === 'edit'} /></div>
                 <div><label className={lbl}>Class</label>
-                  <input className={inp} value={form.class_} onChange={e => setForm(f => ({ ...f, class_: e.target.value }))} placeholder="เช่น F1, F2, M1 ..." />
+                  <input className={inp} value={form.class_} onChange={e => setForm(f => ({ ...f, class_: e.target.value }))} placeholder="" />
                 </div>
                 <div><label className={lbl}>Supplier</label><input className={inp} value={form.supplier} onChange={e => setForm(f => ({ ...f, supplier: e.target.value }))} /></div>
-                <div><label className={lbl}>MPE (mg.)</label><input type="text" inputMode="decimal" onFocus={e => e.target.select()} className={inp} value={form.mpe} onChange={e => { const v = e.target.value; if (/^-?\d*\.?\d*$/.test(v)) setForm(f => ({ ...f, mpe: v })) }} /></div>
+                <div><label className={lbl}>MPE (mg.)</label><input type="text" inputMode="decimal" onFocus={e => e.target.select()} className={inp} value={form.mpe} onChange={e => { const v = e.target.value; if (/^-?\d*\.?\d{0,1}$/.test(v)) setForm(f => ({ ...f, mpe: v })) }} /></div>
                 <div><label className={lbl}>Calibrate Date</label><input type="date" className={inp} value={form.calDate} onChange={e => setForm(f => ({ ...f, calDate: e.target.value }))} /></div>
                 <div><label className={lbl}>Calibrate By</label><input className={inp} value={form.calBy} onChange={e => setForm(f => ({ ...f, calBy: e.target.value }))} /></div>
                 <div><label className={lbl}>Certificate Report No.</label><input className={inp} value={form.certNo} onChange={e => setForm(f => ({ ...f, certNo: e.target.value }))} /></div>
-                <div><label className={lbl}>Conventional Mass (mg.)</label><input type="text" inputMode="decimal" onFocus={e => e.target.select()} className={inp} value={form.convMass} onChange={e => { const v = e.target.value; if (/^-?\d*\.?\d*$/.test(v)) setForm(f => ({ ...f, convMass: v })) }} /></div>
-                <div><label className={lbl}>Uncertainty (mg.)</label><input type="text" inputMode="decimal" onFocus={e => e.target.select()} className={inp} value={form.uncertainty} onChange={e => { const v = e.target.value; if (/^-?\d*\.?\d*$/.test(v)) setForm(f => ({ ...f, uncertainty: v })) }} /></div>
-                <div><label className={lbl}>Status (คำนวณอัตโนมัติ)</label>
+                <div><label className={lbl}>Conventional Mass (mg.)</label><input type="text" inputMode="decimal" onFocus={e => e.target.select()} className={inp} value={form.convMass} onChange={e => { const v = e.target.value; if (/^-?\d*\.?\d{0,3}$/.test(v)) setForm(f => ({ ...f, convMass: v })) }} /></div>
+                <div><label className={lbl}>Uncertainty (mg.)</label><input type="text" inputMode="decimal" onFocus={e => e.target.select()} className={inp} value={form.uncertainty} onChange={e => { const v = e.target.value; if (/^-?\d*\.?\d{0,3}$/.test(v)) setForm(f => ({ ...f, uncertainty: v })) }} /></div>
+                <div><label className={lbl}>Status (Automatically Calculated)</label>
                   <div className={`${inp} flex items-center bg-gray-100`}>
                     <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${wtStatus(toNum(form.uncertainty), toNum(form.mpe)) === 'Pass' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                       {wtStatus(toNum(form.uncertainty), toNum(form.mpe))}
@@ -198,8 +199,8 @@ export default function WeightsPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-gray-50">
-              <button onClick={() => setModal(null)} className="h-8 px-4 border border-gray-200 rounded-lg text-[12px] text-gray-600 hover:bg-gray-100">ยกเลิก</button>
-              <button onClick={save} className="h-8 px-4 bg-blue-600 text-white text-[12px] font-medium rounded-lg hover:bg-blue-700">บันทึก</button>
+              <button onClick={() => setModal(null)} className="h-8 px-4 border border-gray-200 rounded-lg text-[12px] text-gray-600 hover:bg-gray-100">Cancel</button>
+              <button onClick={save} className="h-8 px-4 bg-blue-600 text-white text-[12px] font-medium rounded-lg hover:bg-blue-700">Save</button>
             </div>
           </div>
         </div>
